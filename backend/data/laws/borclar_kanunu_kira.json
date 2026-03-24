@@ -1,0 +1,85 @@
+{
+  "kanun_adi": "Türk Borçlar Kanunu",
+  "kanun_no": "6098",
+  "kategori": "kira",
+  "maddeler": [
+    {
+      "madde_no": "299",
+      "baslik": "Tanımı",
+      "icerik": "Kira sözleşmesi, kiraya verenin bir şeyin kullanılmasını veya kullanmayla birlikte ondan yararlanılmasını kiracıya bırakmayı, kiracının da buna karşılık kararlaştırılan kira bedelini ödemeyi üstlendiği sözleşmedir.",
+      "risk_etiketleri": ["sozlesme_tanimi", "kira_bedeli"]
+    },
+    {
+      "madde_no": "300",
+      "baslik": "Kira bedelinin belirlenmesi",
+      "icerik": "Kira bedeli, Türk parası ile ödenir. Sözleşmede yabancı para ile ödeme kararlaştırılmışsa, sözleşme hükümlerine göre ödeme yapılır.",
+      "risk_etiketleri": ["kira_bedeli", "doviz", "odeme"]
+    },
+    {
+      "madde_no": "301",
+      "baslik": "Teslim borcu",
+      "icerik": "Kiraya veren, kiralananı kararlaştırılan tarihte, sözleşmede amaçlanan kullanıma elverişli bir durumda teslim etmek ve sözleşme süresince bu durumda bulundurmakla yükümlüdür.",
+      "risk_etiketleri": ["teslim", "kullanim_elverisliligi", "bakim"]
+    },
+    {
+      "madde_no": "303",
+      "baslik": "Yan giderler",
+      "icerik": "Kiraya veren, kiralananın kullanımıyla ilgili olmayan yan giderleri ödemekle yükümlüdür. Bununla birlikte, taraflar sözleşmeyle kiracının bu giderleri üstleneceğini kararlaştırabilirler.",
+      "risk_etiketleri": ["yan_giderler", "aidat", "isitma", "su"]
+    },
+    {
+      "madde_no": "305",
+      "baslik": "Ayıptan sorumluluk - Kiracının hakları",
+      "icerik": "Kiralananın tesliminden sonra ortaya çıkan ve kiraya verenin sorumlu olduğu ayıplar kiracıya kira bedelinden indirim, ayıbın giderilmesini isteme veya sözleşmeyi feshetme hakları verir. Kiracı, daha büyük bir zarar uğramışsa bunu da tazminat olarak isteyebilir.",
+      "risk_etiketleri": ["ayip", "bozukluk", "onarim", "fesih", "tazminat"]
+    },
+    {
+      "madde_no": "308",
+      "baslik": "Ayıpları bildirme yükümlülüğü",
+      "icerik": "Kiracı, kiralananın kullanılmasını engelleyen veya önemli ölçüde güçleştiren ayıpların ortaya çıkması hâlinde, bunu kiraya verene hemen bildirmekle yükümlüdür; aksi takdirde bu ayıptan doğan zarardan sorumlu olur.",
+      "risk_etiketleri": ["ayip_bildirimi", "sorumluluk", "bildirim_suresi"]
+    },
+    {
+      "madde_no": "315",
+      "baslik": "Kiracının temerrüdü",
+      "icerik": "Kiracı, muaccel olan kira bedelini veya yan gideri ödeme borcunu yerine getirmezse, kiraya veren kiracıya yazılı olarak bir süre verip, bu sürede de yerine getirilmezse, sözleşmeyi feshedebileceğini bildirebilir. Kiracıya verilecek süre, konut ve çatılı işyeri kiralarında en az otuz gün, diğer kira ilişkilerinde ise en az altı gündür.",
+      "risk_etiketleri": ["odeme_temerrudi", "fesih", "ihtar", "sure", "tahliye"]
+    },
+    {
+      "madde_no": "316",
+      "baslik": "Özen ve komşulara saygı gösterme borcu",
+      "icerik": "Kiracı, kiralananı, sözleşmeye uygun olarak özenle kullanmak ve kiralananın bulunduğu taşınmazda oturan kişiler ile komşulara gerekli saygıyı göstermekle yükümlüdür.",
+      "risk_etiketleri": ["ozen_yükümlülügü", "komsuluk", "kullanim_kurallari"]
+    },
+    {
+      "madde_no": "322",
+      "baslik": "Kiralananın kullanımının devri ve kiracılığın devri",
+      "icerik": "Kiracı, kiraya verenin yazılı rızasını almadıkça, kira ilişkisinden doğan haklarını başkasına devredemez veya kiralananı başkasına kiralayamaz.",
+      "risk_etiketleri": ["devir", "alt_kiralama", "izin", "yazili_riza"]
+    },
+    {
+      "madde_no": "335",
+      "baslik": "Olağan fesih - Konut ve çatılı işyeri kirası",
+      "icerik": "Konut ve çatılı işyeri kiralarında kiracı, belirli süreli sözleşmelerin süresinin bitiminden en az on beş gün önce bildirimde bulunmadıkça, sözleşme aynı koşullarla bir yıl için uzatılmış sayılır.",
+      "risk_etiketleri": ["sure_uzatimi", "fesih_bildirimi", "otomatik_uzama", "15_gun"]
+    },
+    {
+      "madde_no": "343",
+      "baslik": "Kira bedelinin belirlenmesi - Artış sınırı",
+      "icerik": "Kira sözleşmelerinde kira bedelinin belirlenmesi dışında, kiracı aleyhine değişiklik yapılamaz. Kira bedeline ilişkin anlaşmalar, bir yıllık kira dönemi içinde TÜFE oranını geçemez.",
+      "risk_etiketleri": ["kira_artisi", "tufe", "zam_siniri", "kiracı_haklari"]
+    },
+    {
+      "madde_no": "347",
+      "baslik": "Kiraya verenin fesih hakkı - Gereksinim, yeniden inşa ve imar",
+      "icerik": "Kiraya veren, kira sözleşmesini; kiralananı kendisi, eşi, altsoyu, üstsoyu veya kanun gereği bakmakla yükümlü olduğu diğer kişiler için konut ya da işyeri gereksinimi sebebiyle kullanma zorunluluğu varsa belirli süreli sözleşmelerde sürenin sonunda, belirsiz süreli sözleşmelerde ise fesih dönemine ve fesih bildirimi için öngörülen sürelere uyarak belirleyeceği tarihten başlayarak bir ay içinde açacağı dava ile sona erdirebilir.",
+      "risk_etiketleri": ["tahliye", "ihtiyac_sebebiyle_fesih", "dava", "kiraya_veren_hakki"]
+    },
+    {
+      "madde_no": "352",
+      "baslik": "Kiracının tahliye taahhüdü",
+      "icerik": "Kiracı, kiralananın teslim edilmesinden sonra, kiraya verene karşı kiralananı belli bir tarihte boşaltmayı yazılı olarak üstlenmişse, kiraya veren kira sözleşmesini bu tarihten başlayarak bir ay içinde icraya başvurmak veya dava açmak suretiyle sona erdirebilir.",
+      "risk_etiketleri": ["tahliye_taahhudu", "yazili_taahhut", "tahliye", "onemli_risk"]
+    }
+  ]
+}
