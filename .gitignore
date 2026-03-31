@@ -25,6 +25,9 @@ backend/chroma_db/
 # ChromaDB model cache
 .cache/
 
+# Kanun PDF'leri (telif hakkı nedeniyle repoya dahil edilmez)
+backend/data/pdfs/*.pdf
+
 # IDE
 .vscode/
 .idea/
