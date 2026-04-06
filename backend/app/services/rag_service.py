@@ -26,6 +26,7 @@ def search_relevant_laws(
     clause_text: str,
     n_results: int = 3,
     kategori_filtre: str | None = None,
+    min_similarity: float = 0.45,
 ) -> list[LawSearchResult]:
     """
     Verilen sözleşme maddesiyle semantik olarak en alakalı
@@ -36,6 +37,9 @@ def search_relevant_laws(
         n_results: Kaç sonuç döneceği (varsayılan 3)
         kategori_filtre: Opsiyonel - sadece bu kategoriden ara
                         ("kira", "is_sozlesmesi" vb.)
+        min_similarity: Minimum benzerlik eşiği (varsayılan 0.45).
+                        Bu eşiğin altındaki sonuçlar filtrelenir —
+                        düşük benzerlikli kanunların LLM'i yanıltmasını önler.
     """
     client = get_chroma_client()
     collection = get_laws_collection(client)
@@ -73,7 +77,9 @@ def search_relevant_laws(
             )
         )
 
-    return law_results
+    # Düşük benzerlikli sonuçları filtrele — LLM'in alakasız kanunlarla
+    # yanıltılmasını ve hallüsinasyon riskini önler.
+    return [r for r in law_results if r.benzerlik_skoru >= min_similarity]
 
 
 def get_collection_stats() -> dict[str, int]:

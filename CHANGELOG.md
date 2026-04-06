@@ -4,6 +4,51 @@ Bu dosya, projeye eklenen her yeni özelliğin kaydını tutar.
 
 ---
 
+## [2026-04-06] RAG Entegrasyonu ve Hallüsinasyon Önleme
+
+**Modül:** `backend/app/` | **Teknoloji:** ChromaDB + Pydantic AI ModelRetry
+
+### Amaç
+
+Hukuki platformlarda LLM'in var olmayan kanun maddeleri uydurması (hallüsinasyon) kabul
+edilemez bir risk. Bu güncelleme ile AI ajanının karar vermeden önce ChromaDB'ye sorması
+teknik olarak zorunlu hale getirildi ve doğrulama katmanları eklendi.
+
+### Güncellenen Dosyalar
+
+| Dosya | Değişiklik |
+|-------|------------|
+| `backend/app/services/rag_service.py` | `min_similarity=0.45` eşiği eklendi — düşük benzerlikli sonuçlar LLM'e gitmez |
+| `backend/app/core/agent.py` | `madde_dogrula` tool eklendi; orkestrasyon katmanı RAG skorunu doğrudan ChromaDB'den okur |
+| `backend/app/models.py` | `ClauseAnalysis`'e `rag_bulunan: bool` ve `rag_max_benzerlik: float` alanları eklendi |
+| `backend/app/core/prompts.py` | Kanun bulunamazsa fallback kuralı eklendi (madde uydurma yasak) |
+
+### Yeni Dosyalar
+
+| Dosya | Açıklama |
+|-------|----------|
+| `backend/scripts/test_hallucination.py` | 5 bilinen Türk hukuku vakasıyla doğruluk testi — API key geldiğinde çalıştırılacak |
+
+### Eklenen Önlemler
+
+| Önlem | Nasıl Çalışır |
+|-------|---------------|
+| **Benzerlik Eşiği** | `search_relevant_laws(min_similarity=0.45)` — eşiğin altındaki kanun sonuçları filtrelenir |
+| **`madde_dogrula` Tool** | LLM kanun_no + madde_no vererek tam metni çeker; var olmayan madde `ModelRetry` fırlatır |
+| **RAG skoru çıktıda** | `rag_bulunan` ve `rag_max_benzerlik` LLM değil gerçek ChromaDB verisiyle doldurulur |
+| **Fallback kuralı** | Kanun bulunamazsa: `yellow`, `kanun_dayanagi=null`, avukat yönlendirmesi |
+
+### Doğrulama
+
+```
+Kayitli toollar: ['kanun_ara', 'madde_dogrula']
+Alakasiz metin (min_similarity=0.45): 1 sonuc  (onceden: 3)
+TUFE konusu: 3 sonuc, max benzerlik: 58.18%
+ClauseAnalysis yeni alanlar: rag_bulunan, rag_max_benzerlik — OK
+```
+
+---
+
 ## [2026-03-31] Pydantic AI Çekirdeği
 
 **Modül:** `backend/app/core/` | **Teknoloji:** Pydantic AI v1.74.0 + OpenAI GPT-4o

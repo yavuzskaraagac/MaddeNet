@@ -24,6 +24,8 @@ class ClauseAnalysis(BaseModel):
     kanun_dayanagi: str | None = Field(default=None, description="Ilgili kanunun adi (orn: 'Turk Borclar Kanunu')")
     kanun_maddesi: str | None = Field(default=None, description="Ilgili kanun madde numarasi (orn: 'Madde 301')")
     oneri: str | None = Field(default=None, description="RED veya YELLOW icin kullaniciya pratik oneri")
+    rag_bulunan: bool = Field(default=False, description="ChromaDB'de ilgili kanun bulundu mu?")
+    rag_max_benzerlik: float | None = Field(default=None, description="RAG aramasindaki en yuksek benzerlik skoru (0-1)")
 
 
 class ContractAnalysisResult(BaseModel):

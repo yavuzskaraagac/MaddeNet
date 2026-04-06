@@ -99,7 +99,43 @@ async def kanun_ara(
     return "\n\n---\n\n".join(satirlar)
 
 
-# ── Tool 2: sozlesme_turu_belirle (opsiyonel) ─────────────────────────────────
+# ── Tool 2: madde_dogrula (hallüsinasyon önleme) ──────────────────────────────
+
+@contract_agent.tool
+async def madde_dogrula(
+    _ctx: RunContext[AnalysisDeps],
+    kanun_no: str,
+    madde_no: str,
+) -> str:
+    """
+    Belirli bir kanun maddesini dogrudan ChromaDB'den ID ile ceker.
+    kanun_ara sonrasi kanun_dayanagi'ni kesinlestirmek icin kullan.
+    Var olmayan madde numarasi verilirse hata firlatir.
+
+    Args:
+        kanun_no: Kanun numarasi (orn: "6098", "4857")
+        madde_no: Madde numarasi (orn: "301", "17")
+    """
+    from app.services.chroma_client import get_chroma_client, get_laws_collection
+
+    collection = get_laws_collection(get_chroma_client())
+    doc_id = f"{kanun_no}-madde-{madde_no}"
+    result = collection.get(ids=[doc_id], include=["documents", "metadatas"])
+
+    if not result["ids"]:
+        raise ModelRetry(
+            f"Kanun {kanun_no} / Madde {madde_no} veritabaninda bulunamadi. "
+            "Farkli bir madde numarasi dene veya kanun_ara ile tekrar ara."
+        )
+
+    metadata = result["metadatas"][0]
+    return (
+        f"[{metadata.get('kanun_adi', kanun_no)} - Madde {madde_no}]\n"
+        f"{result['documents'][0][:600]}"
+    )
+
+
+# ── Tool 3: sozlesme_turu_belirle (opsiyonel) ─────────────────────────────────
 
 @dataclass
 class _TurResult:
@@ -217,6 +253,15 @@ async def analyze_contract(
     for madde_no, madde_metni in maddeler_raw:
         prompt = build_clause_prompt(madde_no, madde_metni, sozlesme_turu.value)
 
+        # RAG sonuçlarını orkestrasyon katmanında da al — LLM çıktısına değil,
+        # gerçek ChromaDB verisine dayanarak rag_bulunan ve rag_max_benzerlik doldur.
+        rag_results = search_relevant_laws(
+            clause_text=madde_metni,
+            kategori_filtre=deps.kategori_filtre,
+        )
+        rag_bulunan = len(rag_results) > 0
+        rag_max_benzerlik = max((r.benzerlik_skoru for r in rag_results), default=None)
+
         result = await contract_agent.run(
             prompt,
             model=model,
@@ -226,7 +271,11 @@ async def analyze_contract(
 
         # output_type=ClauseAnalysis oldugu icin result.output dogrudan modeli verir
         analiz: ClauseAnalysis = result.output
-        analiz = analiz.model_copy(update={"madde_metni": madde_metni})
+        analiz = analiz.model_copy(update={
+            "madde_metni": madde_metni,
+            "rag_bulunan": rag_bulunan,
+            "rag_max_benzerlik": rag_max_benzerlik,
+        })
         analiz_sonuclari.append(analiz)
 
     return ContractAnalysisResult(
