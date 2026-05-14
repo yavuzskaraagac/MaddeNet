@@ -4,6 +4,78 @@ Bu dosya, projeye eklenen her yeni özelliğin kaydını tutar.
 
 ---
 
+## [2026-05-14] FastAPI Endpoint'leri ve Backend Tamamlama
+
+**Modül:** `backend/app/api/` + `backend/app/services/` | **Teknoloji:** FastAPI + Supabase + Unstructured.io
+
+### Amaç
+
+AI çekirdeği ve RAG sistemi hazırdı; bu güncelleme ile uçtan uca çalışan HTTP API'ı yazıldı.
+Web ve mobil istemciler artık PDF yükleyip analiz sonuçlarını alabilir.
+
+### Yeni Dosyalar
+
+| Dosya | Açıklama |
+|-------|----------|
+| `backend/app/api/deps.py` | Supabase JWT doğrulama middleware + OpenAI key injection |
+| `backend/app/api/documents.py` | PDF yükleme, listeleme, detay, silme endpoint'leri |
+| `backend/app/api/analyses.py` | Analiz başlatma, listeleme, detay, silme endpoint'leri |
+| `backend/app/api/users.py` | Kullanıcı profil endpoint'i |
+| `backend/app/api/rag.py` | ChromaDB istatistik endpoint'i |
+| `backend/app/services/supabase_client.py` | Singleton Supabase service role client |
+| `backend/app/services/document_service.py` | Storage yükleme/indirme/silme + documents tablosu CRUD |
+| `backend/app/services/analysis_service.py` | PDF→metin→agent→Supabase tam pipeline |
+| `backend/scripts/supabase_migration.sql` | Eksik tablo kolonlarını ekleyen idempotent migration |
+
+### Endpoint Listesi (9 endpoint)
+
+| Method | Endpoint | Açıklama |
+|--------|----------|----------|
+| `POST` | `/api/documents/upload` | PDF yükle → Supabase Storage |
+| `GET` | `/api/documents` | Belgelerimi listele |
+| `GET` | `/api/documents/{id}` | Tek belge detayı |
+| `DELETE` | `/api/documents/{id}` | Belge + Storage + analizler sil |
+| `POST` | `/api/analyses` | Belgeyi analiz et (tam pipeline) |
+| `GET` | `/api/analyses` | Analizlerimi listele |
+| `GET` | `/api/analyses/{id}` | Analiz detayı (tüm maddeler) |
+| `DELETE` | `/api/analyses/{id}` | Analiz sil |
+| `GET` | `/api/users/me` | Profil bilgisi |
+
+### Analiz Pipeline Akışı
+
+```
+POST /api/analyses
+  → Supabase Storage'dan PDF indir
+  → Unstructured.io ile metne dönüştür (thread pool)
+  → detect_contract_type() ile tür tespit et (opsiyonel)
+  → analyze_contract() → Pydantic AI + ChromaDB RAG
+  → analyses + analysis_items tablolarına kaydet
+  → AnalysisDetailResponse dön
+```
+
+### Güncellenen Dosyalar
+
+| Dosya | Değişiklik |
+|-------|------------|
+| `backend/main.py` | 4 router kayıt edildi, versiyon 0.2.0 |
+| `backend/app/models.py` | Request/response şemaları eklendi; `DocumentStatus.PROCESSING` enum'u eklendi |
+| `backend/.env.example` | `SUPABASE_SERVICE_ROLE_KEY` ve `SUPABASE_ANON_KEY` eklendi |
+
+### Eksiksizlik Kontrolleri
+
+- `SUPABASE_KEY` → `SUPABASE_SERVICE_ROLE_KEY` isim uyumsuzluğu giderildi
+- `DocumentStatus.PROCESSING` eksik enum değeri eklendi
+- Supabase `contracts` Storage bucket gerekliliği belgelendi
+- `supabase_migration.sql` ile eksik kolonlar (storage_path, sozlesme_turu, madde_sayisi, rag_bulunan, rag_max_benzerlik vb.) eklendi
+
+### Notlar
+
+- Swagger UI: `http://localhost:8000/docs` — web ve mobil testleri buradan yapılabilir
+- Auth: Supabase JWT Bearer token ile; login/register Supabase client-side halleder
+- Analiz süresi: sözleşme uzunluğuna bağlı (her madde için 1 LLM çağrısı); ileride background task'a alınabilir
+
+---
+
 ## [2026-04-06] RAG Entegrasyonu ve Hallüsinasyon Önleme
 
 **Modül:** `backend/app/` | **Teknoloji:** ChromaDB + Pydantic AI ModelRetry
