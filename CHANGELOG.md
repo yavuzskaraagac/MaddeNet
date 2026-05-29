@@ -4,6 +4,79 @@ Bu dosya, projeye eklenen her yeni özelliğin kaydını tutar.
 
 ---
 
+## [2026-05-29] Backend Yapılandırma, Supabase Kurulumu ve RAG Düzeltmeleri
+
+**Modül:** `backend/` | **Teknoloji:** Supabase Management API + ChromaDB + Pydantic AI
+
+### Amaç
+
+Tüm ortam değişkenleri, veritabanı migration'ı ve Storage bucket kurulumu tamamlandı.
+Uçtan uca analiz testi yapılarak sistemin gerçek OpenAI API key ile çalıştığı doğrulandı.
+Test sırasında tespit edilen iki kritik hata düzeltildi.
+
+### Yapılan Kurulum Adımları
+
+| Adım | Açıklama |
+|------|----------|
+| `backend/.env` oluşturuldu | OpenAI, Supabase URL, Anon Key, Service Role Key, ChromaDB path |
+| Supabase migration çalıştırıldı | Management API ile 8 yeni kolon eklendi (storage_path, sozlesme_turu, rag_bulunan vb.) |
+| `contracts` Storage bucket oluşturuldu | Python client ile otomatik; Public: kapalı (private) |
+| Storage RLS politikaları eklendi | INSERT / SELECT / DELETE — kullanıcı yalnızca kendi klasörüne erişir |
+| ChromaDB doğrulandı | 2.392 kanun maddesi yüklü ve erişilebilir durumda |
+
+### Düzeltilen Hatalar
+
+**1. Pydantic AI v1.74.0 — OpenAI provider API değişikliği**
+
+`backend/app/core/agent.py`
+
+```python
+# Eski (çalışmıyordu):
+return OpenAIModel("gpt-4o", api_key=api_key)
+
+# Yeni:
+return OpenAIModel("gpt-4o", provider=OpenAIProvider(api_key=api_key))
+```
+
+Pydantic AI v1.74.0'da `OpenAIModel.__init__()` artık `api_key` parametresi almıyor;
+bunun yerine `OpenAIProvider(api_key=...)` ile sarmalanması gerekiyor.
+
+**2. ChromaDB kategori filtresi — sıfır sonuç döndürme**
+
+`backend/app/services/rag_service.py`
+
+ChromaDB metadata filtresinde `{"kategori": "kira"}` tam eşleşme arıyordu. Ancak kayıtlar
+`"kira,kefalet,sozlesme"` şeklinde virgüllü saklandığından filtre 0 sonuç döndürüyor,
+dolayısıyla tüm analizlerde `rag_bulunan=False` çıkıyordu.
+
+Çözüm: ChromaDB where filtresi kaldırıldı, Python katmanında `kategori_filtre in r.kategori`
+ile post-filter uygulandı.
+
+### Uçtan Uca Test Sonuçları
+
+8 maddelik örnek kira sözleşmesi analiz edildi:
+
+| Madde | Risk | RAG | Doğruluk |
+|-------|------|-----|----------|
+| Taraflar | Yeşil | 0.62 | Doğru |
+| Kiralanan | Yeşil | 0.70 | Doğru |
+| TÜFE x2 artış | **Kırmızı** | 0.74 | Doğru — TBK 344 ihlali |
+| 3 ay depozito | Sarı | 0.70 | Doğru |
+| 3 gün tahliye | **Kırmızı** | 0.69 | Doğru — TBK 352 ihlali |
+| Onarım kiracıya | Sarı | 0.70 | Doğru |
+| Erken fesih cezası | **Kırmızı** | 0.71 | Doğru |
+| DASK sigortası | Sarı | 0.66 | Doğru |
+
+Genel risk skoru: **56/100** | Kırmızı: 3, Sarı: 3, Yeşil: 2
+
+### Sistem Durumu
+
+- `GET /health` → `{"status":"ok","version":"0.2.0"}` ✓
+- `GET /api/rag/stats` → `{"toplam_kanun_maddesi":2392}` ✓
+- Backend **production-ready** — sıradaki adım: Next.js frontend
+
+---
+
 ## [2026-05-14] FastAPI Endpoint'leri ve Backend Tamamlama
 
 **Modül:** `backend/app/api/` + `backend/app/services/` | **Teknoloji:** FastAPI + Supabase + Unstructured.io

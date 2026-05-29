@@ -44,12 +44,12 @@ def search_relevant_laws(
     client = get_chroma_client()
     collection = get_laws_collection(client)
 
-    where_filter = {"kategori": kategori_filtre} if kategori_filtre else None
-
+    # Kategori filtresi için n_results fazla alıp Python'da filtrele.
+    # ChromaDB metadata string filtreleri bu versiyonda güvenilir çalışmıyor.
+    fetch_count = n_results * 4 if kategori_filtre else n_results
     results = collection.query(
         query_texts=[clause_text],
-        n_results=n_results,
-        where=where_filter,
+        n_results=fetch_count,
         include=["documents", "metadatas", "distances"],
     )
 
@@ -79,7 +79,11 @@ def search_relevant_laws(
 
     # Düşük benzerlikli sonuçları filtrele — LLM'in alakasız kanunlarla
     # yanıltılmasını ve hallüsinasyon riskini önler.
-    return [r for r in law_results if r.benzerlik_skoru >= min_similarity]
+    filtered = [r for r in law_results if r.benzerlik_skoru >= min_similarity]
+    if kategori_filtre:
+        filtered = [r for r in filtered if kategori_filtre in r.kategori]
+        filtered = filtered[:n_results]
+    return filtered
 
 
 def get_collection_stats() -> dict[str, int]:

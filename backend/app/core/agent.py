@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from pydantic_ai import Agent, ModelRetry, RunContext
 from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.models.test import TestModel
+from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.usage import UsageLimits
 
 from app.core.deps import AnalysisDeps
@@ -32,7 +33,7 @@ def _get_model(api_key: str) -> OpenAIModel | TestModel:
     GPT-5 ciktiginda model adini 'gpt-4o' -> 'gpt-5' olarak degistir.
     """
     if api_key:
-        return OpenAIModel("gpt-4o", api_key=api_key)
+        return OpenAIModel("gpt-4o", provider=OpenAIProvider(api_key=api_key))
     return TestModel()
 
 
