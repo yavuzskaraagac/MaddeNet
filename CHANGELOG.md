@@ -4,6 +4,94 @@ Bu dosya, projeye eklenen her yeni özelliğin kaydını tutar.
 
 ---
 
+## [2026-05-30] Next.js Frontend Oluşturuldu
+
+**Modül:** `frontend/` | **Teknoloji:** Next.js 16 + TypeScript + TailwindCSS + Shadcn UI + Supabase Auth
+
+### Amaç
+
+Claude Design'da hazırlanan HTML/CSS prototiplerinden yola çıkarak tam işlevsel Next.js App Router frontend'i oluşturuldu. Tüm sayfalar backend API'siyle entegre, koyu/açık tema destekli ve tasarım sistemine birebir uyumlu.
+
+### Yeni Dosyalar
+
+| Dosya | Açıklama |
+|-------|----------|
+| `frontend/src/app/page.tsx` | Landing sayfası — aurora hero, browser mockup, features grid, stats, trust band, yasal footer |
+| `frontend/src/app/(auth)/auth/page.tsx` | Giriş/Kayıt — split layout, Supabase email+password auth |
+| `frontend/src/app/(dashboard)/layout.tsx` | Dashboard layout — 244px sidebar, 64px sticky topbar, breadcrumb, arama |
+| `frontend/src/app/(dashboard)/dashboard/page.tsx` | Dashboard — 4-kolon KPI kartları, risk dağılımı, etkinlik akışı, FAB |
+| `frontend/src/app/(dashboard)/upload/page.tsx` | Yükleme sayfası — drag-drop, 4-adım stepper, analiz overlay modal |
+| `frontend/src/app/analysis/[id]/page.tsx` | Analiz sonuçları — split-pane (belge + annotasyon), prev/next navigasyon |
+| `frontend/src/components/brand/Logo.tsx` | AI Terazi SVG logosu + MaddeNet wordmark |
+| `frontend/src/components/analysis/RiskBadge.tsx` | Risk rozeti (YÜKSEK RİSK / DİKKAT / UYGUN) |
+| `frontend/src/components/analysis/RiskGauge.tsx` | Dairesel SVG risk skoru göstergesi (0-100) |
+| `frontend/src/components/analysis/ClauseCard.tsx` | Madde kartı — renkli sol kenarlık, kanun ref, öneri, aksiyon butonları |
+| `frontend/src/components/layout/Sidebar.tsx` | 3 bölümlü sidebar nav, count badge, quota kart |
+| `frontend/src/components/layout/ThemeProvider.tsx` | next-themes dark/light tema sağlayıcı |
+| `frontend/src/components/layout/ThemeToggle.tsx` | Koyu/açık tema toggle butonu |
+| `frontend/src/lib/types.ts` | TypeScript tipleri — ClauseAnalysis, ContractAnalysisResult, RiskLevel vb. |
+| `frontend/src/lib/supabase.ts` | Supabase browser client |
+| `frontend/src/lib/api.ts` | axios API client — Supabase JWT interceptor, tüm endpoint fonksiyonları |
+| `frontend/src/styles/tokens.css` | Claude Design'dan alınan CSS değişkenleri (koyu/açık tema) |
+| `frontend/.env.local` | NEXT_PUBLIC_SUPABASE_URL, ANON_KEY, API_URL |
+
+### Tasarım Sistemi
+
+| Token | Değer |
+|-------|-------|
+| Tema | Koyu varsayılan (#0B0B0E), açık (#FAFAF6) |
+| Aksan | Warm amber — koyu: #C89A5C, açık: #9A6F3C |
+| Risk renkleri | Yüksek: #C75D5D · Orta: #C99B4B · Güvenli: #6FA88A |
+| Yazı tipleri | Newsreader (serif başlıklar) + Inter (body) + JetBrains Mono (kanun ref) |
+
+### Sayfa Özellikleri
+
+**Landing (`/`)**
+- Aurora animasyonu (conic-gradient + spin), dot grid overlay
+- Browser mockup — sözleşme maddeleri + daire gauge preview
+- 3-adım features grid (1px border separator, SVG glyph'lar)
+- 4-kolon stats grid, mevzuat trust band
+- Detaylı yasal uyarı footer (⚖ ikonlu)
+
+**Auth (`/auth`)**
+- Sol aside: gradient arkaplan, örnek sözleşme excerpt kartı
+- Sağ form: email+password, login/signup geçişi, Supabase entegrasyonu
+
+**Dashboard (`/dashboard`)**
+- 4-kolon KPI kartları (radial glow + sparkline SVG)
+- Sarı legal banner
+- 1.5fr + 1fr iki sütunlu grid: analiz tablosu + sağ panel
+- Sağ panel: Risk Dağılımı (56px skor + progress barlar) + Etkinlik akışı
+- Gradient FAB (ring glow efekti)
+
+**Upload (`/upload`)**
+- Radial gradient drag-drop zone
+- Config grid: tür seçici + analiz derinliği radio
+- **Analiz overlay modal**: progress bar + 6 aşamalı stage list + spinner
+
+**Analysis Results (`/analysis/[id]`)**
+- **Split-pane layout** (1.3fr sol + 1fr sağ)
+- Sol: kağıt görünümlü belge, tıklanabilir renkli annotasyon span'ları
+- Sağ: pulse animasyonlu header, prev/next navigasyon, AnnotCard'lar
+- AnnotCard: quote block, law-link, öneri kutusu, aksiyon butonları
+
+### Teknoloji Kütüphaneleri
+
+```
+next@16.2.6, @supabase/supabase-js, @supabase/ssr
+next-themes, framer-motion, axios, zustand
+lucide-react, shadcn/ui (button, card, badge, accordion, sonner)
+```
+
+### Sistem Durumu
+
+- `npm run dev` → `http://localhost:3000` ✓
+- TypeScript strict — sıfır hata (`npx tsc --noEmit`) ✓
+- Tüm sayfalar HTTP 200 ✓
+- Backend: `http://localhost:8000` (ayrı terminal)
+
+---
+
 ## [2026-05-29] Backend Yapılandırma, Supabase Kurulumu ve RAG Düzeltmeleri
 
 **Modül:** `backend/` | **Teknoloji:** Supabase Management API + ChromaDB + Pydantic AI
