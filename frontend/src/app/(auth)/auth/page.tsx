@@ -26,14 +26,34 @@ function AuthForm() {
 
     try {
       if (mode === 'signup') {
-        const { error } = await supabase.auth.signUp({ email, password })
+        if (password.length < 6) throw new Error('Şifre en az 6 karakter olmalıdır')
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+        })
         if (error) throw error
-        toast.success('Hesabınız oluşturuldu! Giriş yapabilirsiniz.')
-        setMode('login')
+        if (data.session) {
+          // Tam sayfa yönlendirme — session cookie'nin yazılmasını garantile
+          window.location.href = '/dashboard'
+        } else {
+          toast.success('Onay e-postası gönderildi. E-postanızı kontrol edin.')
+          setMode('login')
+        }
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password })
-        if (error) throw error
-        router.push('/dashboard')
+        const { data: loginData, error } = await supabase.auth.signInWithPassword({ email, password })
+        if (error) {
+          if (error.message.includes('Email not confirmed')) {
+            throw new Error('E-posta adresiniz henüz doğrulanmamış. Gelen kutunuzu kontrol edin.')
+          }
+          throw error
+        }
+        // Token'ı localStorage'a manuel yaz — sonraki sayfada kesin okunabilsin
+        if (loginData.session) {
+          localStorage.setItem('sb-access-token', loginData.session.access_token)
+          localStorage.setItem('sb-refresh-token', loginData.session.refresh_token ?? '')
+        }
+        window.location.href = '/dashboard'
       }
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Bir hata oluştu')

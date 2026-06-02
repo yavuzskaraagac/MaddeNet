@@ -7,17 +7,17 @@ interface RiskBadgeProps {
 }
 
 const styles: Record<RiskLevel, { bg: string; color: string; border: string }> = {
-  RED: {
+  red: {
     bg: 'var(--risk-high-soft)',
     color: 'var(--risk-high)',
     border: 'var(--risk-high-ring)',
   },
-  YELLOW: {
+  yellow: {
     bg: 'var(--risk-mid-soft)',
     color: 'var(--risk-mid)',
     border: 'var(--risk-mid-ring)',
   },
-  GREEN: {
+  green: {
     bg: 'var(--risk-safe-soft)',
     color: 'var(--risk-safe)',
     border: 'var(--risk-safe-ring)',
@@ -25,7 +25,7 @@ const styles: Record<RiskLevel, { bg: string; color: string; border: string }> =
 }
 
 export function RiskBadge({ level, size = 'md' }: RiskBadgeProps) {
-  const s = styles[level]
+  const s = styles[level] ?? styles.green
   return (
     <span
       style={{

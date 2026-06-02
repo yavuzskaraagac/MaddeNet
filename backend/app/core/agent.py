@@ -124,10 +124,8 @@ async def madde_dogrula(
     result = collection.get(ids=[doc_id], include=["documents", "metadatas"])
 
     if not result["ids"]:
-        raise ModelRetry(
-            f"Kanun {kanun_no} / Madde {madde_no} veritabaninda bulunamadi. "
-            "Farkli bir madde numarasi dene veya kanun_ara ile tekrar ara."
-        )
+        # ModelRetry yerine bilgi mesajı — retry limitini aşmayı önler
+        return f"Kanun {kanun_no} / Madde {madde_no} veritabaninda bulunamadi. kanun_ara ile ilgili kanunu bul."
 
     metadata = result["metadatas"][0]
     return (
@@ -263,21 +261,33 @@ async def analyze_contract(
         rag_bulunan = len(rag_results) > 0
         rag_max_benzerlik = max((r.benzerlik_skoru for r in rag_results), default=None)
 
-        result = await contract_agent.run(
-            prompt,
-            model=model,
-            deps=deps,
-            usage_limits=UsageLimits(request_tokens_limit=8_000),
-        )
-
-        # output_type=ClauseAnalysis oldugu icin result.output dogrudan modeli verir
-        analiz: ClauseAnalysis = result.output
-        analiz = analiz.model_copy(update={
-            "madde_metni": madde_metni,
-            "rag_bulunan": rag_bulunan,
-            "rag_max_benzerlik": rag_max_benzerlik,
-        })
-        analiz_sonuclari.append(analiz)
+        try:
+            result = await contract_agent.run(
+                prompt,
+                model=model,
+                deps=deps,
+                usage_limits=UsageLimits(request_tokens_limit=8_000),
+            )
+            analiz: ClauseAnalysis = result.output
+            analiz = analiz.model_copy(update={
+                "madde_metni": madde_metni,
+                "rag_bulunan": rag_bulunan,
+                "rag_max_benzerlik": rag_max_benzerlik,
+            })
+            analiz_sonuclari.append(analiz)
+        except Exception:
+            # Tek madde hatası tüm analizi çökertmesin — varsayılan yellow risk ata
+            analiz_sonuclari.append(ClauseAnalysis(
+                madde_no=madde_no,
+                madde_metni=madde_metni,
+                risk_seviyesi=RiskLevel.YELLOW,
+                sade_aciklama="Bu madde analiz edilirken bir sorun oluştu. Manuel inceleme önerilir.",
+                kanun_dayanagi=None,
+                kanun_maddesi=None,
+                oneri="Bir hukuk uzmanına danışmanızı tavsiye ederiz.",
+                rag_bulunan=rag_bulunan,
+                rag_max_benzerlik=rag_max_benzerlik,
+            ))
 
     return ContractAnalysisResult(
         belge_id=belge_id,

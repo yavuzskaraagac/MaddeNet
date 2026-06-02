@@ -1,11 +1,4 @@
-"""
-MaddeNet — API Bagimliliklari
-------------------------------
-FastAPI Depends() ile kullanilanlar:
-  - get_current_user: Supabase JWT'yi dogrular, user_id dondurur
-  - get_openai_key:   .env'den OpenAI API key dondurur
-"""
-
+import logging
 import os
 from dataclasses import dataclass
 
@@ -14,6 +7,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.services.supabase_client import get_supabase_client
 
+logger = logging.getLogger(__name__)
 _bearer = HTTPBearer()
 
 
@@ -27,10 +21,6 @@ class CurrentUser:
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(_bearer),
 ) -> CurrentUser:
-    """
-    Authorization: Bearer <supabase_jwt> headerini dogrular.
-    Gecersiz veya suresi dolmus token'da 401 firlatir.
-    """
     token = credentials.credentials
     try:
         supabase = get_supabase_client()
@@ -38,7 +28,7 @@ async def get_current_user(
         if not response.user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Gecersiz veya suresi dolmus token.",
+                detail="Token gecersiz: kullanici bulunamadi.",
             )
         return CurrentUser(
             user_id=response.user.id,
@@ -47,16 +37,14 @@ async def get_current_user(
         )
     except HTTPException:
         raise
-    except Exception:
+    except Exception as e:
+        err_msg = f"{type(e).__name__}: {str(e)}"
+        logger.error(f"Auth hatasi: {err_msg}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Kimlik dogrulama basarisiz.",
+            detail=err_msg,
         )
 
 
 def get_openai_key() -> str:
-    """
-    OPENAI_API_KEY ortam degiskenini dondurur.
-    Ayarli degilse bos string — agent TestModel modunda calisir.
-    """
     return os.getenv("OPENAI_API_KEY", "")

@@ -1,19 +1,38 @@
 import axios from 'axios'
 import { createClient } from './supabase'
-import type { AnalysisRecord, ContractAnalysisResult, DocumentRecord, SozlesmeTuru } from './types'
+import type { AnalysisDetail, AnalysisSummary, DocumentRecord, SozlesmeTuru } from './types'
 
 const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000',
 })
 
+// Token'ı al: önce Supabase session, yoksa localStorage fallback
 api.interceptors.request.use(async (config) => {
   const supabase = createClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  if (session) {
-    config.headers.Authorization = `Bearer ${session.access_token}`
+  const { data } = await supabase.auth.getSession()
+  const token = data.session?.access_token
+    ?? (typeof window !== 'undefined' ? localStorage.getItem('sb-access-token') : null)
+
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
   }
   return config
 })
+
+// 401 gelince session'ı temizle ve login'e yönlendir
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    if (error.response?.status === 401) {
+      const supabase = createClient()
+      await supabase.auth.signOut()
+      if (typeof window !== 'undefined') {
+        window.location.href = '/auth'
+      }
+    }
+    return Promise.reject(error)
+  }
+)
 
 export async function uploadDocument(
   file: File,
@@ -31,27 +50,27 @@ export async function uploadDocument(
 export async function startAnalysis(
   documentId: string,
   sozlesmeTuru: SozlesmeTuru
-): Promise<AnalysisRecord> {
-  const { data } = await api.post<AnalysisRecord>('/api/analyses', {
-    document_id: documentId,
+): Promise<AnalysisSummary> {
+  const { data } = await api.post<AnalysisSummary>('/api/analyses', {
+    belge_id: documentId,
     sozlesme_turu: sozlesmeTuru,
   })
   return data
 }
 
-export async function getAnalysis(id: string): Promise<ContractAnalysisResult> {
-  const { data } = await api.get<ContractAnalysisResult>(`/api/analyses/${id}`)
+export async function getAnalysis(id: string): Promise<AnalysisDetail> {
+  const { data } = await api.get<AnalysisDetail>(`/api/analyses/${id}`)
   return data
 }
 
-export async function listAnalyses(): Promise<AnalysisRecord[]> {
-  const { data } = await api.get<AnalysisRecord[]>('/api/analyses')
-  return data
+export async function listAnalyses(): Promise<AnalysisSummary[]> {
+  const { data } = await api.get<{ analizler: AnalysisSummary[]; toplam: number }>('/api/analyses')
+  return data.analizler
 }
 
 export async function listDocuments(): Promise<DocumentRecord[]> {
-  const { data } = await api.get<DocumentRecord[]>('/api/documents')
-  return data
+  const { data } = await api.get<{ belgeler: DocumentRecord[]; toplam: number }>('/api/documents')
+  return data.belgeler
 }
 
 export async function deleteAnalysis(id: string): Promise<void> {
@@ -62,7 +81,12 @@ export async function deleteDocument(id: string): Promise<void> {
   await api.delete(`/api/documents/${id}`)
 }
 
-export async function getRagStats(): Promise<{ toplam_madde: number }> {
+export async function getRagStats(): Promise<{ toplam_kanun_maddesi: number }> {
   const { data } = await api.get('/api/rag/stats')
+  return data
+}
+
+export async function getDocumentDownloadUrl(id: string): Promise<{ url: string; file_name: string }> {
+  const { data } = await api.get(`/api/documents/${id}/download`)
   return data
 }

@@ -49,10 +49,10 @@ class LawChunk(BaseModel):
 # ── Document Schemas ──────────────────────────────────────────────────────────
 
 class DocumentStatus(str, Enum):
-    PENDING = "pending"
-    PROCESSING = "processing"
-    COMPLETED = "completed"
-    FAILED = "failed"
+    PENDING = "uploaded"       # DB'de "uploaded"
+    PROCESSING = "processing"  # DB'de "processing"
+    COMPLETED = "analyzed"     # DB'de "analyzed"
+    FAILED = "error"           # DB'de "error"
 
 
 class DocumentResponse(BaseModel):

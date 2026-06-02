@@ -13,8 +13,6 @@ Pipeline:
 """
 
 import asyncio
-import os
-import tempfile
 import uuid
 from datetime import datetime
 from functools import partial
@@ -37,25 +35,18 @@ from app.services.supabase_client import get_supabase_client
 # ── PDF Metin Cikarma ─────────────────────────────────────────────────────────
 
 def _extract_text_sync(pdf_bytes: bytes) -> str:
-    """
-    Unstructured.io ile PDF'den metin cikarir (senkron).
-    asyncio thread pool'unda calistirilir.
-    """
-    from unstructured.partition.pdf import partition_pdf
+    """pypdf ile PDF'den metin cikarir (senkron, Windows uyumlu)."""
+    import io
+    from pypdf import PdfReader
 
-    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
-        tmp.write(pdf_bytes)
-        tmp_path = tmp.name
-
-    try:
-        elements = partition_pdf(filename=tmp_path)
-        paragraflar = [str(e).strip() for e in elements if str(e).strip()]
-        return "\n\n".join(paragraflar)
-    finally:
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
+    reader = PdfReader(io.BytesIO(pdf_bytes))
+    parcalar: list[str] = []
+    for page in reader.pages:
+        text = page.extract_text() or ""
+        text = text.strip()
+        if text:
+            parcalar.append(text)
+    return "\n\n".join(parcalar)
 
 
 async def extract_text_from_pdf(pdf_bytes: bytes) -> str:
@@ -83,6 +74,12 @@ def _genel_risk_seviyesi(skor: int) -> RiskLevel:
     return RiskLevel.GREEN
 
 
+# DB'deki "high/medium/low" değerlerini frontend'in beklediği "red/yellow/green"'e çevirir
+_DB_TO_RISK = {"high": RiskLevel.RED, "medium": RiskLevel.YELLOW, "low": RiskLevel.GREEN}
+# "red/yellow/green" → DB'ye yazılacak "high/medium/low"
+_RISK_TO_DB = {RiskLevel.RED: "high", RiskLevel.YELLOW: "medium", RiskLevel.GREEN: "low"}
+
+
 # ── Supabase Kayit ────────────────────────────────────────────────────────────
 
 def _save_analysis_to_db(
@@ -104,7 +101,7 @@ def _save_analysis_to_db(
         "document_id": belge_id,
         "sozlesme_turu": sozlesme_turu.value,
         "overall_risk_score": genel_risk_skoru,
-        "overall_risk_level": genel_risk_seviyesi.value,
+        "overall_risk_level": _RISK_TO_DB[genel_risk_seviyesi],  # red→high, yellow→medium, green→low
         "madde_sayisi": len(maddeler),
     }).execute()
 
@@ -252,7 +249,7 @@ async def list_analyses(user_id: str) -> list[AnalysisSummary]:
             belge_id=row["document_id"],
             sozlesme_turu=SozlesmeTuru(row["sozlesme_turu"]),
             genel_risk_skoru=row["overall_risk_score"],
-            genel_risk_seviyesi=RiskLevel(row["overall_risk_level"]),
+            genel_risk_seviyesi=_DB_TO_RISK.get(row["overall_risk_level"], RiskLevel.YELLOW),
             madde_sayisi=row["madde_sayisi"],
             created_at=datetime.fromisoformat(row["created_at"]),
         )
@@ -314,7 +311,7 @@ async def get_analysis_detail(analiz_id: str, user_id: str) -> AnalysisDetailRes
         belge_id=a["document_id"],
         sozlesme_turu=SozlesmeTuru(a["sozlesme_turu"]),
         genel_risk_skoru=a["overall_risk_score"],
-        genel_risk_seviyesi=RiskLevel(a["overall_risk_level"]),
+        genel_risk_seviyesi=_DB_TO_RISK.get(a["overall_risk_level"], RiskLevel.YELLOW),
         maddeler=maddeler,
         created_at=datetime.fromisoformat(a["created_at"]),
     )

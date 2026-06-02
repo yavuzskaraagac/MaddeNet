@@ -4,6 +4,138 @@ Bu dosya, projeye eklenen her yeni özelliğin kaydını tutar.
 
 ---
 
+## [2026-06-02] Tam Uçtan Uca Entegrasyon, Hata Düzeltmeleri ve Yeni Özellikler
+
+**Modül:** `frontend/` + `backend/` | **Teknoloji:** Next.js 16 + FastAPI + Supabase + Pydantic AI
+
+### Amaç
+
+Frontend ile backend tam olarak birleştirildi. Kritik kimlik doğrulama sorunları, veritabanı şema uyumsuzlukları, PDF işleme hataları ve performans sorunları çözüldü. Kullanıcının PDF yükleyip analiz yaptırabildiği, sonuçları görüntüleyebildiği ve PDF olarak indirebildiği eksiksiz bir akış sağlandı.
+
+---
+
+### Backend Düzeltmeleri
+
+#### 1. `load_dotenv()` Eksikliği — Tüm 401 Hatalarının Kök Nedeni
+
+`backend/main.py`
+
+```python
+# Eklendi — uvicorn .env dosyasını otomatik yüklemez
+from dotenv import load_dotenv
+load_dotenv()
+```
+
+Bu eksiklik nedeniyle `SUPABASE_URL` ve `SUPABASE_SERVICE_ROLE_KEY` ortam değişkenleri hiç yüklenmiyordu; tüm API istekleri 401 döndürüyordu.
+
+#### 2. Veritabanı Şema Uyumsuzlukları — CHECK Constraint Hataları
+
+`backend/app/models.py`
+
+Supabase tablolarındaki gerçek CHECK constraint değerleri ile backend enum değerleri uyuşmuyordu:
+
+| Tablo | Kolon | Eski (yanlış) | Yeni (doğru) |
+|-------|-------|---------------|--------------|
+| `documents` | `status` | `pending / completed / failed` | `uploaded / analyzed / error` |
+| `analyses` | `overall_risk_level` | `red / yellow / green` | `high / medium / low` |
+| `analysis_items` | `risk_color` | — | `red / yellow / green` ✓ |
+
+`analysis_service.py`'e çift yönlü mapping eklendi: DB'ye yazarken `red→high`, okurken `high→red`.
+
+#### 3. PDF Metin Çıkarma — `unstructured` → `pypdf`
+
+`backend/app/services/analysis_service.py`
+
+`unstructured[pdf]` paketi Python 3.13 ile uyumsuz ve Windows'ta kurulumu başarısız. Yerine `pypdf` kullanıldı — sıfır sistem bağımlılığı, Windows uyumlu.
+
+```python
+from pypdf import PdfReader
+reader = PdfReader(io.BytesIO(pdf_bytes))
+```
+
+#### 4. Pydantic AI — `madde_dogrula` Tool Retry Sorunu
+
+`backend/app/core/agent.py`
+
+`madde_dogrula` tool'u ChromaDB'de bulamadığı kanunlar için `ModelRetry` fırlatıyordu. 2 deneme hakkı bitince `UnexpectedModelBehavior` → 500 hatası. Düzeltme: `ModelRetry` yerine bilgi mesajı döndür.
+
+Ek olarak `analyze_contract` döngüsüne madde başına try/except eklendi — tek madde hatası tüm analizi çökertmiyor, varsayılan sarı risk atanıyor.
+
+#### 5. Güvenli Dosya İndirme Endpoint'i
+
+`backend/app/api/documents.py`
+
+`contracts` bucket private olduğundan public URL 404 veriyordu. Yeni endpoint:
+
+```
+GET /api/documents/{id}/download → 60 saniyelik imzalı URL
+```
+
+---
+
+### Frontend Düzeltmeleri
+
+#### 1. Next.js 16 — `middleware.ts` → `proxy.ts`
+
+Next.js 16'da `middleware` convention'ı `proxy` olarak yeniden adlandırıldı. Dosya ve export fonksiyon adı güncellendi. Auth guard proxy yerine dashboard layout'ta client-side yapılıyor.
+
+#### 2. Supabase Client — `@supabase/ssr` → `@supabase/supabase-js`
+
+Production build'de `@supabase/ssr`'ın `createBrowserClient` cookie okumasında tutarsızlık. Doğrudan `@supabase/supabase-js` kullanımına geçildi; session localStorage'da saklanıyor, sayfa yenilemede kaybolmuyor.
+
+#### 3. Login Yönlendirme Race Condition
+
+`frontend/src/app/(auth)/auth/page.tsx`
+
+`router.push('/dashboard')` client-side navigation yaptığından session cookie henüz yazılmamış oluyordu. `window.location.href = '/dashboard'` ile tam sayfa yenilemeye geçildi.
+
+#### 4. CSS ve Performans
+
+- `shadcn/tailwind.css`, `@theme inline` bloğu ve Shadcn değişkenleri kaldırıldı
+- `framer-motion`, `@base-ui/react`, `zustand`, `shadcn`, `clsx` gibi kullanılmayan paketler silindi (345 paket azaltıldı)
+- `npm run dev` yerine `npm run build && npm start` — Turbopack derleme gecikmesi yok, anlık sayfa yüklemesi
+
+#### 5. API Interceptor İyileştirmeleri
+
+`frontend/src/lib/api.ts`
+
+- 401 response interceptor eklendi — geçersiz/süresi dolmuş token otomatik temizlenir, `/auth`'a yönlendirilir
+- Token hem Supabase session'dan hem localStorage fallback'ten okunur
+
+---
+
+### Yeni Sayfalar ve Özellikler
+
+| Sayfa / Özellik | Açıklama |
+|-----------------|----------|
+| `/documents` | Yüklenen belgeler listesi — durum badge, imzalı indirme, analiz başlatma, silme |
+| `/profile` | Kullanıcı profili — istatistikler, kullanıcı adı düzenleme (Supabase `user_metadata`) |
+| `/settings` | Şifre değiştirme, çıkış, hesap silme (tehlikeli bölge) |
+| **PDF İndir** | Analiz sonuçlarını temiz HTML raporu olarak PDF'e aktarır — sözleşme türü, risk özeti, tüm maddeler |
+| **Kullanıcı Adı Değiştirme** | Profil sayfasında kalem ikonu ile inline düzenleme, Enter ile kaydetme |
+| **Çıkış Yap** | Sidebar footer ve header'da çıkış butonu |
+
+### Silinen Özellikler
+
+- Analiz sayfasındaki **Kabul / Reddet / Avukata sor** butonları kaldırıldı
+
+---
+
+### Sistem Durumu
+
+| Bileşen | Durum |
+|---------|-------|
+| Supabase bağlantısı | ✅ |
+| ChromaDB (2.392 kanun) | ✅ |
+| PDF yükleme | ✅ 201 Created |
+| AI analiz pipeline | ✅ GPT-4o + RAG |
+| Dashboard, Belgelerim, Profil, Ayarlar | ✅ |
+| Auth (giriş / kayıt / çıkış) | ✅ |
+| Güvenli dosya indirme | ✅ İmzalı URL |
+| PDF rapor çıktısı | ✅ |
+
+---
+
 ## [2026-05-30] Next.js Frontend Oluşturuldu
 
 **Modül:** `frontend/` | **Teknoloji:** Next.js 16 + TypeScript + TailwindCSS + Shadcn UI + Supabase Auth

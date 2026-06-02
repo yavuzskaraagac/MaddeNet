@@ -7,8 +7,7 @@ GET    /api/documents/{id}     → Tek belge
 DELETE /api/documents/{id}     → Belgeyi sil
 """
 
-from fastapi import APIRouter, Depends, UploadFile, status
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
 
 from app.api.deps import CurrentUser, get_current_user
 from app.models import DocumentListResponse, DocumentResponse
@@ -18,6 +17,7 @@ from app.services.document_service import (
     list_documents,
     upload_document,
 )
+from app.services.supabase_client import get_supabase_client
 
 router = APIRouter(prefix="/api/documents", tags=["Belgeler"])
 
@@ -59,6 +59,40 @@ async def get_document_endpoint(
     current_user: CurrentUser = Depends(get_current_user),
 ) -> DocumentResponse:
     return await get_document(belge_id=belge_id, user_id=current_user.user_id)
+
+
+@router.get(
+    "/{belge_id}/download",
+    summary="Guvenli indirme URL'i",
+    description="60 saniye gecerli imzali indirme URL'i dondurur.",
+)
+async def download_url_endpoint(
+    belge_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+) -> dict:
+    supabase = get_supabase_client()
+    try:
+        row = (
+            supabase.table("documents")
+            .select("storage_path, file_name")
+            .eq("id", belge_id)
+            .eq("user_id", current_user.user_id)
+            .single()
+            .execute()
+        )
+    except Exception:
+        raise HTTPException(status_code=404, detail="Belge bulunamadi.")
+
+    storage_path: str = row.data["storage_path"]
+    file_name: str = row.data["file_name"]
+
+    try:
+        signed = supabase.storage.from_("contracts").create_signed_url(
+            storage_path, expires_in=60
+        )
+        return {"url": signed["signedURL"], "file_name": file_name}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"URL olusturulamadi: {e}")
 
 
 @router.delete(

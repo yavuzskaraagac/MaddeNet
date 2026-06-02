@@ -11,9 +11,9 @@ interface ClauseCardProps {
 }
 
 const borderColors = {
-  RED: 'var(--risk-high)',
-  YELLOW: 'var(--risk-mid)',
-  GREEN: 'var(--risk-safe)',
+  red: 'var(--risk-high)',
+  yellow: 'var(--risk-mid)',
+  green: 'var(--risk-safe)',
 }
 
 export function ClauseCard({ clause, index }: ClauseCardProps) {
@@ -78,7 +78,7 @@ export function ClauseCard({ clause, index }: ClauseCardProps) {
                 overflow: 'hidden',
               }}
             >
-              {clause.aciklama}
+              {clause.sade_aciklama}
             </p>
           </div>
 

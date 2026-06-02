@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()  # .env dosyasını yükle — uvicorn başlamadan önce çalışmalı
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 

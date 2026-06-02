@@ -9,8 +9,8 @@ openai>=1.57.0
 # Vector Database
 chromadb==0.5.23
 
-# Document Processing
-unstructured[pdf]==0.16.11
+# Document Processing — Python 3.13 compatible
+unstructured[pdf]>=0.16.19
 
 # Database
 supabase==2.10.0

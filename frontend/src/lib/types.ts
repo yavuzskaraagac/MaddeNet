@@ -1,4 +1,4 @@
-export type RiskLevel = 'RED' | 'YELLOW' | 'GREEN'
+export type RiskLevel = 'red' | 'yellow' | 'green'
 
 export type SozlesmeTuru =
   | 'kira'
@@ -11,42 +11,46 @@ export interface ClauseAnalysis {
   madde_no: string
   madde_metni: string
   risk_seviyesi: RiskLevel
-  aciklama: string
-  kanun_dayanagi: string
-  oneri: string
+  sade_aciklama: string
+  kanun_dayanagi: string | null
+  kanun_maddesi: string | null
+  oneri: string | null
   rag_bulunan: boolean
   rag_max_benzerlik: number | null
 }
 
-export interface ContractAnalysisResult {
+export interface AnalysisDetail {
+  id: string
   belge_id: string
   sozlesme_turu: SozlesmeTuru
-  maddeler: ClauseAnalysis[]
   genel_risk_skoru: number
+  genel_risk_seviyesi: RiskLevel
+  maddeler: ClauseAnalysis[]
+  created_at: string
+}
+
+export interface AnalysisSummary {
+  id: string
+  belge_id: string
+  sozlesme_turu: SozlesmeTuru
+  genel_risk_skoru: number
+  genel_risk_seviyesi: RiskLevel
+  madde_sayisi: number
+  created_at: string
 }
 
 export interface DocumentRecord {
   id: string
-  user_id: string
-  filename: string
+  file_name: string
+  file_url: string
   file_size: number
-  status: 'pending' | 'processing' | 'completed' | 'failed'
-  storage_path: string | null
+  status: 'uploaded' | 'processing' | 'analyzed' | 'error'
   created_at: string
-  updated_at: string
 }
 
-export interface AnalysisRecord {
-  id: string
-  document_id: string
-  user_id: string
-  sozlesme_turu: SozlesmeTuru
-  madde_sayisi: number
-  genel_risk_skoru: number
-  sonuc: ContractAnalysisResult | null
-  status: 'pending' | 'processing' | 'completed' | 'failed'
-  created_at: string
-}
+// Backward compat aliases
+export type ContractAnalysisResult = AnalysisDetail
+export type AnalysisRecord = AnalysisSummary
 
 export const SOZLESME_TURU_LABELS: Record<SozlesmeTuru, string> = {
   kira: 'Kira Sözleşmesi',
@@ -57,7 +61,7 @@ export const SOZLESME_TURU_LABELS: Record<SozlesmeTuru, string> = {
 }
 
 export const RISK_LABELS: Record<RiskLevel, string> = {
-  RED: 'YÜKSEK RİSK',
-  YELLOW: 'DİKKAT',
-  GREEN: 'UYGUN',
+  red: 'YÜKSEK RİSK',
+  yellow: 'DİKKAT',
+  green: 'UYGUN',
 }
