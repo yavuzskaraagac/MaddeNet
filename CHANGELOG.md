@@ -4,6 +4,101 @@ Bu dosya, projeye eklenen her yeni özelliğin kaydını tutar.
 
 ---
 
+## [2026-06-08] Flutter Android Mobil Uygulama
+
+**Modül:** `mobile/` | **Teknoloji:** Flutter 3.44 + Provider + GoRouter + Dio + Supabase
+
+### Amaç
+
+Claude Design prototiplerinden yola çıkarak MaddeNet'in tam işlevsel Flutter Android mobil uygulaması oluşturuldu. Web platformundaki tasarım dili ve renk sistemi birebir Flutter'a aktarıldı.
+
+---
+
+### Mimari
+
+| Katman | Teknoloji |
+|--------|-----------|
+| State Management | Provider (`ThemeProvider`, `AuthProvider`) |
+| Navigasyon | GoRouter — ShellRoute (bottom nav) + nested routes |
+| HTTP | Dio — base URL `http://10.0.2.2:8000` (emülatör → localhost) |
+| Tema | `ThemeExtension` (`MnColors`) — dark/light token sistemi |
+| Yazı Tipleri | Google Fonts: Newsreader + Inter + JetBrains Mono |
+| Dosya Seçici | file_picker |
+| Kalıcı Depolama | SharedPreferences (tema tercihi) |
+
+### Yeni Dosyalar
+
+| Dosya | Açıklama |
+|-------|----------|
+| `mobile/lib/main.dart` | Uygulama girişi — GoRouter tanımı, MultiProvider, SystemChrome edge-to-edge |
+| `mobile/lib/theme/app_theme.dart` | `MnColors` ThemeExtension (24 token) + `AppTheme.dark()` / `AppTheme.light()` |
+| `mobile/lib/providers/theme_provider.dart` | Karanlık/açık tema — SharedPreferences'a kalıcı |
+| `mobile/lib/providers/auth_provider.dart` | Giriş / kayıt / çıkış — ApiService bağlantılı |
+| `mobile/lib/services/api_service.dart` | Dio tabanlı API client — login, register, upload, analyses, documents, profile |
+| `mobile/lib/models/analysis.dart` | `Clause` + `Analysis` Pydantic modelleri — risk hesaplama getter'ları |
+| `mobile/lib/models/document.dart` | `Document` — status badge getter'ı |
+| `mobile/lib/widgets/risk_pill.dart` | `RiskPill` renk kodlu risk etiketi + `RiskScoreBadge` |
+| `mobile/lib/widgets/mn_card.dart` | `MnCard` (isteğe bağlı glow) + `MnLegalNote` |
+| `mobile/lib/widgets/mn_button.dart` | `MnPrimaryButton` (amber gradient) + `MnGhostButton` + `MnDangerButton` |
+| `mobile/lib/widgets/brand_mark.dart` | `BrandMark` + `BrandLogo` + `UserAvatar` |
+| `mobile/lib/screens/splash_screen.dart` | Giriş ekranı — aura arka plan, grid çizgiler, yasal not |
+| `mobile/lib/screens/auth_screen.dart` | Giriş / Kayıt sekmeleri — form doğrulama, yükleme durumu |
+| `mobile/lib/screens/shell_screen.dart` | Bottom navigation shell — 4 sekme |
+| `mobile/lib/screens/dashboard_screen.dart` | Ana sayfa — 4 istatistik kartı, son analizler, risk dağılım barı |
+| `mobile/lib/screens/upload_screen.dart` | PDF yükleme — 4 adım göstergesi, sözleşme türü seçici |
+| `mobile/lib/screens/analyzing_sheet.dart` | Analiz overlay — zamanlayıcı tabanlı ilerleme, 6 aşama |
+| `mobile/lib/screens/results_screen.dart` | Sonuç ekranı — filtre chip'leri, madde kartları, kanun referansı |
+| `mobile/lib/screens/documents_screen.dart` | Belgelerim — durum badge, görüntüle / indir / sil |
+| `mobile/lib/screens/analyses_screen.dart` | Analizlerim — büyük risk skoru kartı, haftalık bar grafik |
+| `mobile/lib/screens/profile_screen.dart` | Profil — avatar, istatistikler, aktivite listesi |
+| `mobile/lib/screens/settings_screen.dart` | Ayarlar — tema toggle, şifre değiştirme, tehlikeli bölge |
+
+### Ekranlar ve Navigasyon
+
+```
+/ (Splash)
+├── /auth            → Giriş / Kayıt
+├── /upload          → Yeni Analiz
+│   └── AnalyzingSheet (overlay)
+├── /results/:id     → Analiz Sonuçları
+├── /settings        → Ayarlar
+└── ShellRoute (bottom nav)
+    ├── /dashboard   → Ana Sayfa
+    ├── /documents   → Belgelerim
+    ├── /analyses    → Analizlerim
+    └── /profile     → Profil
+```
+
+### Tasarım Sistemi (Design Tokens)
+
+| Token | Karanlık | Açık |
+|-------|----------|------|
+| Arka plan | `#0B0B0E` | `#FAFAF6` |
+| Aksan | `#C89A5C` | `#9A6F3C` |
+| Yüksek risk | `#C75D5D` | — |
+| Orta risk | `#C99B4B` | — |
+| Güvenli | `#6FA88A` | — |
+
+### Derleme Düzeltmeleri
+
+| Sorun | Çözüm |
+|-------|-------|
+| `flutter_plugin_android_lifecycle` compileSdk 36 gereksinimi | `pubspec.yaml`'a `dependency_overrides: flutter_plugin_android_lifecycle: 2.0.21` |
+| `compileSdk` uyumsuzluğu | `android/app/build.gradle.kts`'de `compileSdk = 36` |
+| Impeller renderer emülatör çöküşü | `AndroidManifest.xml`'e `EnableImpeller: false` |
+| `DateFormat` locale hatası | `main.dart`'a `initializeDateFormatting('tr_TR', null)` |
+
+### Sistem Durumu
+
+| Bileşen | Durum |
+|---------|-------|
+| Flutter analyze | ✅ Sıfır hata |
+| APK build | ✅ `app-debug.apk` |
+| Emülatör (Pixel 7) | ✅ Çalışıyor |
+| Backend bağlantısı | 🔄 Sonraki adım |
+
+---
+
 ## [2026-06-02] Tam Uçtan Uca Entegrasyon, Hata Düzeltmeleri ve Yeni Özellikler
 
 **Modül:** `frontend/` + `backend/` | **Teknoloji:** Next.js 16 + FastAPI + Supabase + Pydantic AI
