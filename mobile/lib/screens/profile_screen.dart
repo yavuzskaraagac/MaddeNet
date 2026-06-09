@@ -2,144 +2,163 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
-import '../theme/app_theme.dart';
 import '../providers/auth_provider.dart';
-import '../providers/theme_provider.dart';
+import '../services/api_service.dart';
+import '../theme/app_theme.dart';
 import '../widgets/brand_mark.dart';
-import '../widgets/mn_card.dart';
-import '../widgets/risk_pill.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  late Future<Map<String, dynamic>> _future;
+  late Future<Map<String, dynamic>> _statsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  void _load() {
+    final token = context.read<AuthProvider>().token ?? '';
+    final api = ApiService();
+    _future = api.getProfile(token);
+    _statsFuture = api.getAnalyses(token);
+  }
 
   @override
   Widget build(BuildContext context) {
     final mn = MnColors.of(context);
     final auth = context.watch<AuthProvider>();
-    final themeProvider = context.watch<ThemeProvider>();
-    final accent = Theme.of(context).colorScheme.primary;
 
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        title: Text('Profil', style: GoogleFonts.newsreader(fontSize: 18, fontWeight: FontWeight.w500)),
+        title: Text('Profil', style: GoogleFonts.newsreader(fontSize: 20, fontWeight: FontWeight.w500)),
         actions: [
-          IconButton(
-            icon: Icon(themeProvider.isDark ? Icons.dark_mode_outlined : Icons.light_mode_outlined, color: mn.textSoft),
-            onPressed: themeProvider.toggle,
-          ),
           IconButton(
             icon: Icon(Icons.settings_outlined, color: mn.textSoft),
             onPressed: () => context.go('/settings'),
           ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-        children: [
-          // Profile header
-          MnCard(
-            glow: true,
-            padding: const EdgeInsets.all(22),
-            child: Column(
-              children: [
-                UserAvatar(initials: auth.userInitials, size: 72, fontSize: 22),
-                const SizedBox(height: 14),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(auth.userName, style: GoogleFonts.newsreader(fontSize: 22, fontWeight: FontWeight.w500, letterSpacing: -0.02, color: Theme.of(context).colorScheme.onSurface)),
-                    const SizedBox(width: 8),
-                    Container(
-                      width: 32, height: 32,
-                      decoration: BoxDecoration(color: mn.bgInset, shape: BoxShape.circle, border: Border.all(color: mn.border)),
-                      child: Icon(Icons.edit_outlined, size: 14, color: mn.textMuted),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Text(auth.userEmail, style: GoogleFonts.inter(fontSize: 13, color: mn.textMuted)),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          // Stats 2-col
-          Row(
+      body: FutureBuilder(
+        future: Future.wait([_future, _statsFuture]),
+        builder: (context, snap) {
+          final profile = snap.data?[0];
+          final statsData = snap.data?[1];
+          final totalAnalyses = (statsData?['toplam'] as num?)?.toInt() ?? 0;
+
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
             children: [
-              Expanded(child: MnCard(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+              // Avatar + name
+              Center(
                 child: Column(
                   children: [
-                    Text('24', style: GoogleFonts.newsreader(fontSize: 22, fontWeight: FontWeight.w500, letterSpacing: -0.02, color: Theme.of(context).colorScheme.onSurface, height: 1)),
-                    const SizedBox(height: 6),
-                    Text('Toplam Analiz', style: GoogleFonts.inter(fontSize: 11, color: mn.textMuted), textAlign: TextAlign.center),
-                  ],
-                ),
-              )),
-              const SizedBox(width: 10),
-              Expanded(child: MnCard(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-                child: Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                      textBaseline: TextBaseline.alphabetic,
-                      children: [
-                        Text('3', style: GoogleFonts.newsreader(fontSize: 22, fontWeight: FontWeight.w500, letterSpacing: -0.02, color: Theme.of(context).colorScheme.onSurface, height: 1)),
-                        const SizedBox(width: 4),
-                        Text('Ay', style: GoogleFonts.inter(fontSize: 12, color: mn.textMuted)),
-                      ],
+                    UserAvatar(initials: auth.userInitials, size: 72, fontSize: 24),
+                    const SizedBox(height: 14),
+                    Text(
+                      profile?['full_name'] as String? ?? auth.userName,
+                      style: GoogleFonts.newsreader(fontSize: 22, fontWeight: FontWeight.w500, color: Theme.of(context).colorScheme.onSurface),
                     ),
-                    const SizedBox(height: 6),
-                    Text('Kullanım Süresi', style: GoogleFonts.inter(fontSize: 11, color: mn.textMuted), textAlign: TextAlign.center),
-                  ],
-                ),
-              )),
-            ],
-          ),
-          const SizedBox(height: 24),
-          Text('Hesap Bilgileri', style: GoogleFonts.newsreader(fontSize: 17, fontWeight: FontWeight.w500, color: Theme.of(context).colorScheme.onSurface)),
-          const SizedBox(height: 10),
-          MnCard(
-            padding: EdgeInsets.zero,
-            child: Column(
-              children: [
-                _ProfileRow(icon: Icons.mail_outline, label: 'E-posta', value: auth.userEmail),
-                Divider(height: 1, color: mn.borderSubtle),
-                _ProfileRow(icon: Icons.person_outline, label: 'Kullanıcı Adı', value: '@${auth.userName.toLowerCase().replaceAll(' ', '.')}', editable: true),
-                Divider(height: 1, color: mn.borderSubtle),
-                _ProfileRow(icon: Icons.shield_outlined, label: 'Kimlik Doğrulama', value: 'Doğrulandı', last: true),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('Etkinlik', style: GoogleFonts.newsreader(fontSize: 17, fontWeight: FontWeight.w500, color: Theme.of(context).colorScheme.onSurface)),
-              GestureDetector(
-                onTap: () => context.go('/documents'),
-                child: Row(
-                  children: [
-                    Text('Tümünü Gör', style: GoogleFonts.inter(fontSize: 12.5, color: accent)),
-                    Icon(Icons.chevron_right, size: 14, color: accent),
+                    const SizedBox(height: 4),
+                    Text(
+                      auth.userEmail,
+                      style: GoogleFonts.inter(fontSize: 13, color: mn.textMuted),
+                    ),
                   ],
                 ),
               ),
+              const SizedBox(height: 24),
+              // Stats row
+              Row(
+                children: [
+                  Expanded(
+                    child: _StatBox(
+                      value: '$totalAnalyses',
+                      label: 'Toplam Analiz',
+                      loading: snap.connectionState == ConnectionState.waiting,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _StatBox(
+                      value: snap.connectionState == ConnectionState.waiting ? '...' : _memberSince(profile),
+                      label: 'Üye Tarihi',
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              // Menu rows
+              _ProfileRow(
+                icon: Icons.analytics_outlined,
+                label: 'Analizlerim',
+                onTap: () => context.go('/analyses'),
+              ),
+              _ProfileRow(
+                icon: Icons.folder_outlined,
+                label: 'Belgelerim',
+                onTap: () => context.go('/documents'),
+              ),
+              _ProfileRow(
+                icon: Icons.settings_outlined,
+                label: 'Ayarlar',
+                onTap: () => context.go('/settings'),
+              ),
+              const SizedBox(height: 16),
+              const Divider(),
+              const SizedBox(height: 16),
+              _ProfileRow(
+                icon: Icons.logout,
+                label: 'Çıkış Yap',
+                danger: true,
+                onTap: () async {
+                  await context.read<AuthProvider>().logout();
+                  if (context.mounted) context.go('/');
+                },
+              ),
             ],
-          ),
-          const SizedBox(height: 10),
-          MnCard(
-            padding: EdgeInsets.zero,
-            child: Column(
-              children: [
-                _ActivityRow(doc: 'Kira Sözleşmesi', date: '03 Haz', risk: RiskLevel.mid),
-                Divider(height: 1, color: mn.borderSubtle),
-                _ActivityRow(doc: 'İş Sözleşmesi', date: '29 May', risk: RiskLevel.high, last: true),
-              ],
-            ),
-          ),
+          );
+        },
+      ),
+    );
+  }
+
+  String _memberSince(Map<String, dynamic>? profile) {
+    final created = profile?['created_at'] as String?;
+    if (created == null) return '—';
+    final dt = DateTime.tryParse(created);
+    if (dt == null) return '—';
+    return '${dt.year}';
+  }
+}
+
+class _StatBox extends StatelessWidget {
+  const _StatBox({required this.value, required this.label, this.loading = false});
+  final String value;
+  final String label;
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) {
+    final mn = MnColors.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+      decoration: BoxDecoration(color: mn.bgCard, borderRadius: BorderRadius.circular(14), border: Border.all(color: mn.border)),
+      child: Column(
+        children: [
+          loading
+              ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.primary))
+              : Text(value, style: GoogleFonts.newsreader(fontSize: 28, fontWeight: FontWeight.w500, color: Theme.of(context).colorScheme.onSurface, height: 1)),
+          const SizedBox(height: 6),
+          Text(label, style: GoogleFonts.inter(fontSize: 12, color: mn.textMuted), textAlign: TextAlign.center),
         ],
       ),
     );
@@ -147,67 +166,37 @@ class ProfileScreen extends StatelessWidget {
 }
 
 class _ProfileRow extends StatelessWidget {
-  const _ProfileRow({required this.icon, required this.label, required this.value, this.editable = false, this.last = false});
+  const _ProfileRow({required this.icon, required this.label, required this.onTap, this.danger = false});
   final IconData icon;
-  final String label, value;
-  final bool editable, last;
+  final String label;
+  final VoidCallback onTap;
+  final bool danger;
 
   @override
   Widget build(BuildContext context) {
     final mn = MnColors.of(context);
-    final accent = Theme.of(context).colorScheme.primary;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: Row(
-        children: [
-          Container(
-            width: 32, height: 32,
-            decoration: BoxDecoration(color: mn.accentSoft, borderRadius: BorderRadius.circular(10), border: Border.all(color: mn.accentRing)),
-            child: Icon(icon, size: 16, color: accent),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, style: GoogleFonts.inter(fontSize: 11, color: mn.textMuted, letterSpacing: 0.02)),
-                Text(value, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500, color: Theme.of(context).colorScheme.onSurface), overflow: TextOverflow.ellipsis),
-              ],
-            ),
-          ),
-          if (editable) Icon(Icons.edit_outlined, size: 14, color: mn.textFaint),
-        ],
-      ),
-    );
-  }
-}
+    final color = danger ? mn.riskHigh : Theme.of(context).colorScheme.primary;
+    final bgColor = danger ? mn.riskHighSoft : mn.accentSoft;
+    final borderColor = danger ? mn.riskHighRing : mn.accentRing;
 
-class _ActivityRow extends StatelessWidget {
-  const _ActivityRow({required this.doc, required this.date, required this.risk, this.last = false});
-  final String doc, date;
-  final RiskLevel risk;
-  final bool last;
-
-  @override
-  Widget build(BuildContext context) {
-    final mn = MnColors.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        children: [
-          Icon(Icons.description_outlined, size: 18, color: mn.textMuted),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(doc, style: GoogleFonts.inter(fontSize: 13.5, fontWeight: FontWeight.w500, color: Theme.of(context).colorScheme.onSurface)),
-                Text('$date 2026', style: GoogleFonts.jetBrainsMono(fontSize: 10.5, color: mn.textFaint)),
-              ],
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        decoration: BoxDecoration(color: mn.bgCard, borderRadius: BorderRadius.circular(12), border: Border.all(color: mn.border)),
+        child: Row(
+          children: [
+            Container(
+              width: 36, height: 36,
+              decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(10), border: Border.all(color: borderColor)),
+              child: Icon(icon, size: 18, color: color),
             ),
-          ),
-          RiskPill(risk: risk, small: true),
-        ],
+            const SizedBox(width: 14),
+            Expanded(child: Text(label, style: GoogleFonts.inter(fontSize: 14.5, fontWeight: FontWeight.w500, color: danger ? mn.riskHigh : Theme.of(context).colorScheme.onSurface))),
+            Icon(Icons.chevron_right, size: 18, color: mn.textFaint),
+          ],
+        ),
       ),
     );
   }

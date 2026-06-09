@@ -4,6 +4,101 @@ Bu dosya, projeye eklenen her yeni özelliğin kaydını tutar.
 
 ---
 
+## [2026-06-09] Flutter Mobil — Backend Entegrasyonu, PDF Görüntüleme ve Rapor Çıktısı
+
+**Modül:** `mobile/` | **Teknoloji:** Supabase Auth + Dio + pdf + printing + url_launcher
+
+### Amaç
+
+Flutter mobil uygulaması gerçek FastAPI backend'e bağlandı. Tüm ekranlar sahte verilerden kurtarılıp canlı API verisiyle beslenir hale getirildi. PDF görüntüleme ve analiz raporu indirme özellikleri eklendi.
+
+---
+
+### Backend Entegrasyonu
+
+#### Kimlik Doğrulama
+
+`supabase_flutter: ^2.5.0` entegre edildi. Önceki mock login/register endpoint'leri kaldırıldı:
+
+| Eylem | Eski | Yeni |
+|-------|------|------|
+| Giriş | Mock endpoint | `Supabase.auth.signInWithPassword()` |
+| Kayıt | Mock endpoint | `Supabase.auth.signUp()` |
+| Çıkış | Mock | `Supabase.auth.signOut()` (async) |
+| Token | — | `Supabase.auth.currentSession?.accessToken` |
+
+#### Güncellenen Ekranlar
+
+| Ekran | Son Durum |
+|-------|-----------|
+| `dashboard_screen.dart` | `FutureBuilder` → `GET /api/analyses` — gerçek istatistikler + risk dağılımı |
+| `analyses_screen.dart` | `FutureBuilder` → gerçek analiz listesi |
+| `documents_screen.dart` | `FutureBuilder` → gerçek belge listesi |
+| `results_screen.dart` | `FutureBuilder` → `GET /api/analyses/{id}` — gerçek maddeler |
+| `profile_screen.dart` | `Future.wait([profile, analyses])` — gerçek profil + istatistikler |
+| `upload_screen.dart` | 2 adımlı gerçek akış: `upload` → `analyse` |
+| `analyzing_sheet.dart` | Timer tabanlı animasyon → gerçek `Future<String>` bekler |
+
+#### Model Güncellemeleri
+
+- Backend Türkçe field isimleri: `madde_no`, `madde_metni`, `risk_seviyesi`, `sade_aciklama`, `kanun_dayanagi`, `kanun_maddesi`, `oneri`
+- Risk mapping: `red→high`, `yellow→mid`, `green→safe`
+- Sarmalayıcı yanıt: `{belgeler: [], toplam: N}` / `{analizler: [], toplam: N}`
+
+---
+
+### Yeni Özellikler
+
+#### PDF Görüntüleme
+
+`url_launcher: ^6.3.0` eklendi. Belgelerim ekranında her belgede "PDF" butonu:
+
+1. `GET /api/documents/{id}/download` → 60 saniyelik imzalı Supabase URL
+2. `launchUrl()` ile cihazın tarayıcısında PDF açılır
+
+#### Analiz PDF Raporu
+
+`pdf: ^3.10.8` + `printing: ^5.12.0` eklendi. `lib/services/pdf_service.dart` oluşturuldu:
+
+- Sonuçlar ekranı AppBar'ında "PDF" butonu
+- Rapor: MaddeNet başlığı, genel risk skoru, özet tablo, her madde (renkli sol çizgi, metin, açıklama, kanun dayanağı, öneri)
+- `Printing.sharePdf()` ile sistem paylaşma menüsü açılır
+
+---
+
+### Hata Düzeltmeleri
+
+| Hata | Kök Neden | Çözüm |
+|------|-----------|-------|
+| "Bağlantı hatası" tüm ekranlarda | `INTERNET` izni ve cleartext traffic eksik | `AndroidManifest.xml`'e izin + `usesCleartextTraffic` eklendi |
+| Siyah madde kartları | `BorderRadius` + farklı kalınlıklarda `Border` Flutter'da desteklenmiyor | `ClipRRect` + `IntrinsicHeight` + sol renkli `Container(width:4)` çubuğu |
+| RIGHT OVERFLOWED 31px | Belgelerim satırında taşma | Butonlar `Row`'dan `Column`'a alındı |
+| PDF rapor assertion hatası | `pdf` paketi de non-uniform border + borderRadius desteklemiyor | `borderRadius` kaldırıldı |
+
+---
+
+### Eklenen Paketler
+
+| Paket | Versiyon | Amaç |
+|-------|----------|------|
+| `supabase_flutter` | ^2.5.0 | Supabase auth |
+| `url_launcher` | ^6.3.0 | PDF tarayıcıda aç |
+| `pdf` | ^3.10.8 | Rapor PDF oluştur |
+| `printing` | ^5.12.0 | PDF paylaş/kaydet |
+
+### Sistem Durumu
+
+| Bileşen | Durum |
+|---------|-------|
+| Supabase Auth (mobil) | ✅ |
+| Tüm ekranlar — gerçek API | ✅ |
+| PDF görüntüleme | ✅ |
+| Analiz PDF raporu | ✅ |
+| `flutter analyze` | ✅ Sıfır hata |
+| Backend + Web eş zamanlı | ✅ |
+
+---
+
 ## [2026-06-08] Flutter Android Mobil Uygulama
 
 **Modül:** `mobile/` | **Teknoloji:** Flutter 3.44 + Provider + GoRouter + Dio + Supabase

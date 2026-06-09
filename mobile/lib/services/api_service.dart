@@ -1,12 +1,12 @@
 import 'package:dio/dio.dart';
 
 class ApiService {
-  static const _baseUrl = 'http://10.0.2.2:8000'; // Android emülatör → localhost
+  static const _baseUrl = 'http://10.0.2.2:8000';
 
   final _dio = Dio(BaseOptions(
     baseUrl: _baseUrl,
     connectTimeout: const Duration(seconds: 30),
-    receiveTimeout: const Duration(seconds: 60),
+    receiveTimeout: const Duration(seconds: 180),
     headers: {'Content-Type': 'application/json'},
   ));
 
@@ -18,39 +18,30 @@ class ApiService {
     _dio.options.headers.remove('Authorization');
   }
 
-  Future<Map<String, dynamic>> login(String email, String password) async {
-    try {
-      final res = await _dio.post('/api/auth/login', data: {
-        'email': email,
-        'password': password,
-      });
-      return res.data as Map<String, dynamic>;
-    } on DioException catch (e) {
-      throw Exception(_parseError(e));
-    }
-  }
-
-  Future<Map<String, dynamic>> register(String fullName, String email, String password) async {
-    try {
-      final res = await _dio.post('/api/auth/register', data: {
-        'full_name': fullName,
-        'email': email,
-        'password': password,
-      });
-      return res.data as Map<String, dynamic>;
-    } on DioException catch (e) {
-      throw Exception(_parseError(e));
-    }
-  }
-
-  Future<Map<String, dynamic>> uploadDocument(String filePath, String contractType, String token) async {
+  Future<Map<String, dynamic>> uploadDocument(String filePath, String token) async {
     setToken(token);
     try {
       final formData = FormData.fromMap({
         'file': await MultipartFile.fromFile(filePath),
-        'contract_type': contractType,
       });
-      final res = await _dio.post('/api/documents/upload', data: formData);
+      final res = await _dio.post(
+        '/api/documents/upload',
+        data: formData,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+      return res.data as Map<String, dynamic>;
+    } on DioException catch (e) {
+      throw Exception(_parseError(e));
+    }
+  }
+
+  Future<Map<String, dynamic>> startAnalysis(String documentId, String contractTypeCode, String token) async {
+    setToken(token);
+    try {
+      final res = await _dio.post('/api/analyses', data: {
+        'belge_id': documentId,
+        'sozlesme_turu': contractTypeCode,
+      });
       return res.data as Map<String, dynamic>;
     } on DioException catch (e) {
       throw Exception(_parseError(e));
@@ -67,21 +58,21 @@ class ApiService {
     }
   }
 
-  Future<List<dynamic>> getAnalyses(String token) async {
+  Future<Map<String, dynamic>> getAnalyses(String token) async {
     setToken(token);
     try {
       final res = await _dio.get('/api/analyses');
-      return res.data as List<dynamic>;
+      return res.data as Map<String, dynamic>;
     } on DioException catch (e) {
       throw Exception(_parseError(e));
     }
   }
 
-  Future<List<dynamic>> getDocuments(String token) async {
+  Future<Map<String, dynamic>> getDocuments(String token) async {
     setToken(token);
     try {
       final res = await _dio.get('/api/documents');
-      return res.data as List<dynamic>;
+      return res.data as Map<String, dynamic>;
     } on DioException catch (e) {
       throw Exception(_parseError(e));
     }
@@ -96,32 +87,30 @@ class ApiService {
     }
   }
 
-  Future<Map<String, dynamic>> getProfile(String token) async {
+  Future<void> deleteAnalysis(String analysisId, String token) async {
     setToken(token);
     try {
-      final res = await _dio.get('/api/users/me');
+      await _dio.delete('/api/analyses/$analysisId');
+    } on DioException catch (e) {
+      throw Exception(_parseError(e));
+    }
+  }
+
+  Future<Map<String, dynamic>> getDownloadUrl(String documentId, String token) async {
+    setToken(token);
+    try {
+      final res = await _dio.get('/api/documents/$documentId/download');
       return res.data as Map<String, dynamic>;
     } on DioException catch (e) {
       throw Exception(_parseError(e));
     }
   }
 
-  Future<void> changePassword(String currentPw, String newPw, String token) async {
+  Future<Map<String, dynamic>> getProfile(String token) async {
     setToken(token);
     try {
-      await _dio.post('/api/users/change-password', data: {
-        'current_password': currentPw,
-        'new_password': newPw,
-      });
-    } on DioException catch (e) {
-      throw Exception(_parseError(e));
-    }
-  }
-
-  Future<void> deleteAccount(String email, String token) async {
-    setToken(token);
-    try {
-      await _dio.delete('/api/users/me', data: {'email': email});
+      final res = await _dio.get('/api/users/me');
+      return res.data as Map<String, dynamic>;
     } on DioException catch (e) {
       throw Exception(_parseError(e));
     }

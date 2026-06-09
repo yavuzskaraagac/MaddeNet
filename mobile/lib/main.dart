@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'theme/app_theme.dart';
 import 'providers/theme_provider.dart';
@@ -29,6 +30,10 @@ void main() async {
   await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
+  await Supabase.initialize(
+    url: 'https://dwiavsmqmixxnzdthrgc.supabase.co',
+    publishableKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR3aWF2c21xbWl4eG56ZHRocmdjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxMzAxMzIsImV4cCI6MjA4ODcwNjEzMn0.CxSeHeWeK3GoUQfjbl7NG9DtmoDddA1pgV--cKIYHbU',
+  );
   await initializeDateFormatting('tr_TR', null);
   final prefs = await SharedPreferences.getInstance();
 

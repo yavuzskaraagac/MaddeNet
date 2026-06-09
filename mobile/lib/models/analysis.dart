@@ -1,85 +1,131 @@
-class Clause {
-  const Clause({
-    required this.id,
-    required this.articleNumber,
-    required this.riskLevel,
-    required this.quote,
-    required this.description,
-    this.lawName,
-    this.lawArticle,
-    this.recommendation,
+import '../widgets/risk_pill.dart';
+
+class ClauseModel {
+  final String maddeNo;
+  final String maddMetni;
+  final String riskSeviyesi;
+  final String sadeAciklama;
+  final String? kanunDayanagi;
+  final String? kanunMaddesi;
+  final String? oneri;
+
+  ClauseModel({
+    required this.maddeNo,
+    required this.maddMetni,
+    required this.riskSeviyesi,
+    required this.sadeAciklama,
+    this.kanunDayanagi,
+    this.kanunMaddesi,
+    this.oneri,
   });
 
-  final String id;
-  final String articleNumber;
-  final String riskLevel; // 'high' | 'mid' | 'safe'
-  final String quote;
-  final String description;
-  final String? lawName;
-  final String? lawArticle;
-  final String? recommendation;
+  factory ClauseModel.fromJson(Map<String, dynamic> j) => ClauseModel(
+        maddeNo: j['madde_no']?.toString() ?? '',
+        maddMetni: j['madde_metni']?.toString() ?? '',
+        riskSeviyesi: j['risk_seviyesi']?.toString() ?? 'green',
+        sadeAciklama: j['sade_aciklama']?.toString() ?? '',
+        kanunDayanagi: j['kanun_dayanagi']?.toString(),
+        kanunMaddesi: j['kanun_maddesi']?.toString(),
+        oneri: j['oneri']?.toString(),
+      );
 
-  String get riskLabel {
-    switch (riskLevel) {
-      case 'high': return 'Yüksek';
-      case 'mid': return 'Dikkat';
-      default: return 'Uygun';
-    }
-  }
-
-  factory Clause.fromJson(Map<String, dynamic> j) => Clause(
-    id: j['id']?.toString() ?? '',
-    articleNumber: j['article_number'] ?? '',
-    riskLevel: j['risk_level'] ?? 'safe',
-    quote: j['quote'] ?? '',
-    description: j['description'] ?? '',
-    lawName: j['law_name'],
-    lawArticle: j['law_article'],
-    recommendation: j['recommendation'],
-  );
+  RiskLevel get riskLevel => riskSeviyesi == 'red'
+      ? RiskLevel.high
+      : riskSeviyesi == 'yellow'
+          ? RiskLevel.mid
+          : RiskLevel.safe;
 }
 
-class Analysis {
-  const Analysis({
+class AnalysisSummary {
+  final String id;
+  final String belgeId;
+  final String sozlesmeTuru;
+  final int genelRiskSkoru;
+  final String genelRiskSeviyesi;
+  final int maddeSayisi;
+  final DateTime createdAt;
+
+  AnalysisSummary({
     required this.id,
-    required this.fileName,
-    required this.contractType,
-    required this.riskScore,
+    required this.belgeId,
+    required this.sozlesmeTuru,
+    required this.genelRiskSkoru,
+    required this.genelRiskSeviyesi,
+    required this.maddeSayisi,
     required this.createdAt,
-    required this.clauses,
   });
 
+  factory AnalysisSummary.fromJson(Map<String, dynamic> j) => AnalysisSummary(
+        id: j['id']?.toString() ?? '',
+        belgeId: j['belge_id']?.toString() ?? '',
+        sozlesmeTuru: j['sozlesme_turu']?.toString() ?? '',
+        genelRiskSkoru: (j['genel_risk_skoru'] as num?)?.toInt() ?? 0,
+        genelRiskSeviyesi: j['genel_risk_seviyesi']?.toString() ?? 'green',
+        maddeSayisi: (j['madde_sayisi'] as num?)?.toInt() ?? 0,
+        createdAt: DateTime.tryParse(j['created_at']?.toString() ?? '') ?? DateTime.now(),
+      );
+
+  RiskLevel get riskLevel => genelRiskSeviyesi == 'red'
+      ? RiskLevel.high
+      : genelRiskSeviyesi == 'yellow'
+          ? RiskLevel.mid
+          : RiskLevel.safe;
+
+  String get sozlesmeTuruLabel => switch (sozlesmeTuru) {
+        'kira' => 'Kira Sözleşmesi',
+        'is_sozlesmesi' => 'İş Sözleşmesi',
+        'ticari' => 'Ticari Sözleşme',
+        'tuketici' => 'Tüketici Sözleşmesi',
+        _ => 'Genel Sözleşme',
+      };
+}
+
+class AnalysisDetail {
   final String id;
-  final String fileName;
-  final String contractType;
-  final int riskScore;
+  final String belgeId;
+  final String sozlesmeTuru;
+  final int genelRiskSkoru;
+  final String genelRiskSeviyesi;
+  final List<ClauseModel> maddeler;
   final DateTime createdAt;
-  final List<Clause> clauses;
 
-  String get riskLevel {
-    if (riskScore >= 70) return 'high';
-    if (riskScore >= 40) return 'mid';
-    return 'safe';
-  }
+  AnalysisDetail({
+    required this.id,
+    required this.belgeId,
+    required this.sozlesmeTuru,
+    required this.genelRiskSkoru,
+    required this.genelRiskSeviyesi,
+    required this.maddeler,
+    required this.createdAt,
+  });
 
-  String get riskLabel {
-    if (riskScore >= 70) return 'Yüksek Risk';
-    if (riskScore >= 40) return 'Orta Risk';
-    return 'Düşük Risk';
-  }
+  factory AnalysisDetail.fromJson(Map<String, dynamic> j) => AnalysisDetail(
+        id: j['id']?.toString() ?? '',
+        belgeId: j['belge_id']?.toString() ?? '',
+        sozlesmeTuru: j['sozlesme_turu']?.toString() ?? '',
+        genelRiskSkoru: (j['genel_risk_skoru'] as num?)?.toInt() ?? 0,
+        genelRiskSeviyesi: j['genel_risk_seviyesi']?.toString() ?? 'green',
+        maddeler: (j['maddeler'] as List<dynamic>? ?? [])
+            .map((m) => ClauseModel.fromJson(m as Map<String, dynamic>))
+            .toList(),
+        createdAt: DateTime.tryParse(j['created_at']?.toString() ?? '') ?? DateTime.now(),
+      );
 
-  int get highCount => clauses.where((c) => c.riskLevel == 'high').length;
-  int get midCount => clauses.where((c) => c.riskLevel == 'mid').length;
-  int get safeCount => clauses.where((c) => c.riskLevel == 'safe').length;
+  int get highCount => maddeler.where((m) => m.riskSeviyesi == 'red').length;
+  int get midCount => maddeler.where((m) => m.riskSeviyesi == 'yellow').length;
+  int get safeCount => maddeler.where((m) => m.riskSeviyesi == 'green').length;
 
-  factory Analysis.fromJson(Map<String, dynamic> j) => Analysis(
-    id: j['id']?.toString() ?? '',
-    fileName: j['file_name'] ?? '',
-    contractType: j['contract_type'] ?? '',
-    riskScore: j['risk_score'] ?? 0,
-    createdAt: DateTime.tryParse(j['created_at'] ?? '') ?? DateTime.now(),
-    clauses: (j['clauses'] as List<dynamic>? ?? [])
-        .map((c) => Clause.fromJson(c as Map<String, dynamic>))
-        .toList(),
-  );
+  RiskLevel get riskLevel => genelRiskSeviyesi == 'red'
+      ? RiskLevel.high
+      : genelRiskSeviyesi == 'yellow'
+          ? RiskLevel.mid
+          : RiskLevel.safe;
+
+  String get sozlesmeTuruLabel => switch (sozlesmeTuru) {
+        'kira' => 'Kira Sözleşmesi',
+        'is_sozlesmesi' => 'İş Sözleşmesi',
+        'ticari' => 'Ticari Sözleşme',
+        'tuketici' => 'Tüketici Sözleşmesi',
+        _ => 'Genel Sözleşme',
+      };
 }

@@ -147,9 +147,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               label: 'Çıkış Yap',
               icon: Icons.logout,
               fullWidth: true,
-              onPressed: () {
-                auth.logout();
-                context.go('/');
+              onPressed: () async {
+                await auth.logout();
+                if (context.mounted) context.go('/');
               },
             ),
           ),

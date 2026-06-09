@@ -3,15 +3,38 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import '../theme/app_theme.dart';
+import '../models/analysis.dart';
 import '../providers/auth_provider.dart';
 import '../providers/theme_provider.dart';
+import '../services/api_service.dart';
+import '../theme/app_theme.dart';
 import '../widgets/brand_mark.dart';
 import '../widgets/mn_card.dart';
 import '../widgets/risk_pill.dart';
 
-class DashboardScreen extends StatelessWidget {
+class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
+
+  @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  late Future<List<AnalysisSummary>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  void _load() {
+    final token = context.read<AuthProvider>().token ?? '';
+    _future = ApiService().getAnalyses(token).then((data) {
+      final list = data['analizler'] as List<dynamic>? ?? [];
+      return list.map((e) => AnalysisSummary.fromJson(e as Map<String, dynamic>)).toList();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -60,96 +83,125 @@ class DashboardScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: Stack(
-        children: [
-          ListView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+      body: FutureBuilder<List<AnalysisSummary>>(
+        future: _future,
+        builder: (context, snap) {
+          final analyses = snap.data ?? [];
+          final isLoading = snap.connectionState == ConnectionState.waiting;
+
+          final total = analyses.length;
+          final highRisk = analyses.where((a) => a.genelRiskSeviyesi == 'red').length;
+          final avgScore = total == 0 ? 0 : analyses.map((a) => a.genelRiskSkoru).reduce((a, b) => a + b) ~/ total;
+          final safe = analyses.where((a) => a.genelRiskSeviyesi == 'green').length;
+          final recent = analyses.take(3).toList();
+
+          // Risk distribution
+          final midCount = analyses.where((a) => a.genelRiskSeviyesi == 'yellow').length;
+          final highPct = total == 0 ? 0 : (highRisk / total * 100).round();
+          final midPct = total == 0 ? 0 : (midCount / total * 100).round();
+          final safePct = total == 0 ? 100 : (safe / total * 100).round();
+
+          return Stack(
             children: [
-              // Stat cards 2x2
-              GridView.count(
-                crossAxisCount: 2,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                crossAxisSpacing: 10,
-                mainAxisSpacing: 10,
-                childAspectRatio: 1.5,
+              ListView(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
                 children: [
-                  _StatCard(label: 'Toplam Analiz', value: '24', sub: 'bu ay +8'),
-                  _StatCard(label: 'Yüksek Riskli', value: '3', sub: 'dikkat', risk: RiskLevel.high),
-                  _StatCard(label: 'Ort. Risk Skoru', value: '58', sub: 'orta seviye', risk: RiskLevel.mid),
-                  _StatCard(label: 'Uygun', value: '14', sub: 'onaylı', risk: RiskLevel.safe),
-                ],
-              ),
-              const SizedBox(height: 16),
-              const MnLegalNote(
-                boldPrefix: 'Analizler bilgilendirme amaçlıdır.',
-                text: 'Bir avukata danışmanız önerilir.',
-              ),
-              const SizedBox(height: 24),
-              // Son Analizler
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Son Analizler', style: GoogleFonts.newsreader(fontSize: 17, fontWeight: FontWeight.w500, color: Theme.of(context).colorScheme.onSurface)),
-                  GestureDetector(
-                    onTap: () => context.go('/documents'),
-                    child: Row(
-                      children: [
-                        Text('Tümünü Gör', style: GoogleFonts.inter(fontSize: 12.5, color: accent)),
-                        Icon(Icons.chevron_right, size: 14, color: accent),
-                      ],
-                    ),
+                  GridView.count(
+                    crossAxisCount: 2,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    crossAxisSpacing: 10,
+                    mainAxisSpacing: 10,
+                    childAspectRatio: 1.5,
+                    children: [
+                      _StatCard(label: 'Toplam Analiz', value: isLoading ? '—' : '$total', sub: 'toplam'),
+                      _StatCard(label: 'Yüksek Riskli', value: isLoading ? '—' : '$highRisk', sub: 'dikkat', risk: RiskLevel.high),
+                      _StatCard(label: 'Ort. Risk Skoru', value: isLoading ? '—' : '$avgScore', sub: avgScore > 60 ? 'yüksek' : avgScore > 35 ? 'orta' : 'düşük', risk: avgScore > 60 ? RiskLevel.high : avgScore > 35 ? RiskLevel.mid : RiskLevel.safe),
+                      _StatCard(label: 'Uygun', value: isLoading ? '—' : '$safe', sub: 'onaylı', risk: RiskLevel.safe),
+                    ],
                   ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              _RecentRow(type: 'Kira Sözleşmesi', date: '03 Haz 2026', risk: RiskLevel.mid, score: 65, onTap: () => context.go('/results/1')),
-              _RecentRow(type: 'İş Sözleşmesi', date: '29 May 2026', risk: RiskLevel.high, score: 82, onTap: () => context.go('/results/2')),
-              _RecentRow(type: 'Tedarik Sözleşmesi', date: '22 May 2026', risk: RiskLevel.safe, score: 28, onTap: () => context.go('/results/3')),
-              const SizedBox(height: 24),
-              // Risk dağılımı
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Risk Dağılımı', style: GoogleFonts.newsreader(fontSize: 17, fontWeight: FontWeight.w500, color: Theme.of(context).colorScheme.onSurface)),
-                  Text('SON 30 GÜN', style: GoogleFonts.jetBrainsMono(fontSize: 10, color: mn.textFaint, letterSpacing: 0.05)),
-                ],
-              ),
-              const SizedBox(height: 10),
-              MnCard(
-                child: Column(
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: Row(
-                        children: [
-                          Flexible(flex: 18, child: Container(height: 8, color: mn.riskHigh)),
-                          Flexible(flex: 34, child: Container(height: 8, color: mn.riskMid)),
-                          Flexible(flex: 48, child: Container(height: 8, color: mn.riskSafe)),
-                        ],
+                  const SizedBox(height: 16),
+                  const MnLegalNote(
+                    boldPrefix: 'Analizler bilgilendirme amaçlıdır.',
+                    text: 'Bir avukata danışmanız önerilir.',
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Son Analizler', style: GoogleFonts.newsreader(fontSize: 17, fontWeight: FontWeight.w500, color: Theme.of(context).colorScheme.onSurface)),
+                      GestureDetector(
+                        onTap: () => context.go('/analyses'),
+                        child: Row(
+                          children: [
+                            Text('Tümünü Gör', style: GoogleFonts.inter(fontSize: 12.5, color: accent)),
+                            Icon(Icons.chevron_right, size: 14, color: accent),
+                          ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 14),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  if (isLoading)
+                    const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator()))
+                  else if (recent.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 20),
+                      child: Center(child: Text('Henüz analiz yok', style: GoogleFonts.inter(fontSize: 14, color: mn.textMuted))),
+                    )
+                  else
+                    ...recent.map((a) => _RecentRow(
+                      type: a.sozlesmeTuruLabel,
+                      date: DateFormat('d MMM yyyy', 'tr_TR').format(a.createdAt.toLocal()),
+                      risk: a.riskLevel,
+                      score: a.genelRiskSkoru,
+                      onTap: () => context.go('/results/${a.id}'),
+                    )),
+                  const SizedBox(height: 24),
+                  if (!isLoading && total > 0) ...[
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        _Legend(color: mn.riskHigh, label: 'Yüksek', pct: '18%'),
-                        _Legend(color: mn.riskMid, label: 'Dikkat', pct: '34%'),
-                        _Legend(color: mn.riskSafe, label: 'Uygun', pct: '48%'),
+                        Text('Risk Dağılımı', style: GoogleFonts.newsreader(fontSize: 17, fontWeight: FontWeight.w500, color: Theme.of(context).colorScheme.onSurface)),
+                        Text('TÜM ANALİZLER', style: GoogleFonts.jetBrainsMono(fontSize: 10, color: mn.textFaint, letterSpacing: 0.05)),
                       ],
                     ),
+                    const SizedBox(height: 10),
+                    MnCard(
+                      child: Column(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: Row(
+                              children: [
+                                if (highPct > 0) Flexible(flex: highPct, child: Container(height: 8, color: mn.riskHigh)),
+                                if (midPct > 0) Flexible(flex: midPct, child: Container(height: 8, color: mn.riskMid)),
+                                if (safePct > 0) Flexible(flex: safePct, child: Container(height: 8, color: mn.riskSafe)),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              _Legend(color: mn.riskHigh, label: 'Yüksek', pct: '$highPct%'),
+                              _Legend(color: mn.riskMid, label: 'Dikkat', pct: '$midPct%'),
+                              _Legend(color: mn.riskSafe, label: 'Uygun', pct: '$safePct%'),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
-                ),
+                ],
+              ),
+              Positioned(
+                right: 20, bottom: 20,
+                child: _Fab(onTap: () => context.go('/upload')),
               ),
             ],
-          ),
-          // FAB
-          Positioned(
-            right: 20,
-            bottom: 20,
-            child: _Fab(onTap: () => context.go('/upload')),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
@@ -201,11 +253,7 @@ class _RecentRow extends StatelessWidget {
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: mn.bgCard,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: mn.border),
-        ),
+        decoration: BoxDecoration(color: mn.bgCard, borderRadius: BorderRadius.circular(14), border: Border.all(color: mn.border)),
         child: Row(
           children: [
             Container(

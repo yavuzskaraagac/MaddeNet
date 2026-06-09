@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../models/document.dart';
+import '../providers/auth_provider.dart';
+import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/risk_pill.dart';
 
@@ -12,20 +17,35 @@ class DocumentsScreen extends StatefulWidget {
 }
 
 class _DocumentsScreenState extends State<DocumentsScreen> {
-  String _filter = 'all';
+  late Future<List<DocumentModel>> _future;
 
-  static const _docs = [
-    (name: 'kira-sozlesmesi-2026.pdf', size: '247 KB', date: '03 Haz 2026', status: 'done', risk: 65),
-    (name: 'is-sozlesmesi-yavuz.pdf', size: '512 KB', date: '29 May 2026', status: 'done', risk: 82),
-    (name: 'tedarik-anlasmasi-q2.pdf', size: '1.2 MB', date: '22 May 2026', status: 'done', risk: 28),
-    (name: 'gizlilik-sozlesmesi.pdf', size: '184 KB', date: '20 May 2026', status: 'processing', risk: 0),
-    (name: 'sigorta-policesi.pdf', size: '8.1 MB', date: '18 May 2026', status: 'error', risk: 0),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
 
-  List<int> get _visible => List.generate(_docs.length, (i) => i).where((i) {
-    if (_filter == 'all') return true;
-    return _docs[i].status == _filter;
-  }).toList();
+  void _load() {
+    final token = context.read<AuthProvider>().token ?? '';
+    _future = ApiService().getDocuments(token).then((data) {
+      final list = data['belgeler'] as List<dynamic>? ?? [];
+      return list.map((e) => DocumentModel.fromJson(e as Map<String, dynamic>)).toList();
+    });
+  }
+
+  Future<void> _delete(String id) async {
+    final token = context.read<AuthProvider>().token ?? '';
+    try {
+      await ApiService().deleteDocument(id, token);
+      setState(() => _load());
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -34,211 +54,196 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        title: Text('Belgelerim', style: GoogleFonts.newsreader(fontSize: 18, fontWeight: FontWeight.w500)),
+        title: Text('Belgelerim', style: GoogleFonts.newsreader(fontSize: 20, fontWeight: FontWeight.w500)),
         actions: [
-          IconButton(icon: Icon(Icons.search, color: mn.textSoft), onPressed: () {}),
-          IconButton(icon: Icon(Icons.add, color: mn.textSoft), onPressed: () => context.go('/upload')),
+          IconButton(
+            icon: Icon(Icons.refresh, color: mn.textSoft),
+            onPressed: () => setState(() => _load()),
+          ),
         ],
       ),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-            child: Text('Sisteme yüklediğiniz tüm PDF belgeleri ve analiz durumları.',
-              style: GoogleFonts.inter(fontSize: 13.5, color: mn.textMuted)),
-          ),
-          const SizedBox(height: 12),
-          // Filter chips
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                _Chip(label: 'Tümü', count: 5, active: _filter == 'all', onTap: () => setState(() => _filter = 'all')),
-                const SizedBox(width: 8),
-                _Chip(label: 'Tamamlandı', count: 3, active: _filter == 'done', onTap: () => setState(() => _filter = 'done')),
-                const SizedBox(width: 8),
-                _Chip(label: 'İşleniyor', count: 1, active: _filter == 'processing', onTap: () => setState(() => _filter = 'processing')),
-                const SizedBox(width: 8),
-                _Chip(label: 'Hata', count: 1, active: _filter == 'error', onTap: () => setState(() => _filter = 'error')),
-              ],
+      body: FutureBuilder<List<DocumentModel>>(
+        future: _future,
+        builder: (context, snap) {
+          if (snap.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snap.hasError) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.error_outline, size: 48, color: mn.riskHigh),
+                  const SizedBox(height: 12),
+                  Text('Bağlantı hatası', style: GoogleFonts.inter(fontSize: 15, color: mn.textSoft)),
+                  const SizedBox(height: 8),
+                  TextButton(onPressed: () => setState(() => _load()), child: const Text('Tekrar dene')),
+                ],
+              ),
+            );
+          }
+          final docs = snap.data ?? [];
+          if (docs.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.folder_open_outlined, size: 56, color: mn.textFaint),
+                  const SizedBox(height: 16),
+                  Text('Henüz belge yüklemediniz', style: GoogleFonts.inter(fontSize: 15, color: mn.textSoft)),
+                  const SizedBox(height: 12),
+                  TextButton.icon(
+                    icon: const Icon(Icons.add),
+                    label: const Text('Belge Yükle'),
+                    onPressed: () => context.go('/upload'),
+                  ),
+                ],
+              ),
+            );
+          }
+          return ListView.builder(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+            itemCount: docs.length,
+            itemBuilder: (_, i) => _DocRow(
+              doc: docs[i],
+              token: context.read<AuthProvider>().token ?? '',
+              onView: () => context.go('/analyses'),
+              onDelete: () => _delete(docs[i].id),
             ),
-          ),
-          const SizedBox(height: 12),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
-              children: _visible.map((i) => _DocCard(doc: _docs[i], onAnalysisTap: () => context.go('/results/$i'))).toList(),
-            ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
 }
 
-class _Chip extends StatelessWidget {
-  const _Chip({required this.label, required this.count, required this.active, required this.onTap});
-  final String label;
-  final int count;
-  final bool active;
-  final VoidCallback onTap;
+class _DocRow extends StatefulWidget {
+  const _DocRow({required this.doc, required this.token, required this.onView, required this.onDelete});
+  final DocumentModel doc;
+  final String token;
+  final VoidCallback onView;
+  final VoidCallback onDelete;
 
   @override
-  Widget build(BuildContext context) {
-    final mn = MnColors.of(context);
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: active ? mn.accentSoft : mn.bgCard,
-          borderRadius: BorderRadius.circular(9999),
-          border: Border.all(color: active ? mn.accentRing : mn.border),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(label, style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w500, color: active ? Theme.of(context).colorScheme.primary : mn.textSoft)),
-            const SizedBox(width: 6),
-            Text('$count', style: GoogleFonts.jetBrainsMono(fontSize: 10.5, color: active ? Theme.of(context).colorScheme.primary : mn.textMuted)),
-          ],
-        ),
-      ),
-    );
-  }
+  State<_DocRow> createState() => _DocRowState();
 }
 
-class _DocCard extends StatelessWidget {
-  const _DocCard({required this.doc, required this.onAnalysisTap});
-  final ({String name, String size, String date, String status, int risk}) doc;
-  final VoidCallback onAnalysisTap;
+class _DocRowState extends State<_DocRow> {
+  bool _pdfLoading = false;
+
+  Future<void> _openPdf() async {
+    setState(() => _pdfLoading = true);
+    try {
+      final result = await ApiService().getDownloadUrl(widget.doc.id, widget.token);
+      final url = result['url'] as String? ?? result['signedURL'] as String?;
+      if (url == null) throw Exception('URL alınamadı');
+      final uri = Uri.parse(url);
+      if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+        throw Exception('Tarayıcı açılamadı');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _pdfLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final mn = MnColors.of(context);
     final accent = Theme.of(context).colorScheme.primary;
-
-    Widget statusBadge;
-    if (doc.status == 'done') {
-      final risk = doc.risk >= 70 ? RiskLevel.high : doc.risk >= 40 ? RiskLevel.mid : RiskLevel.safe;
-      statusBadge = RiskPill(risk: risk, small: true);
-    } else if (doc.status == 'processing') {
-      statusBadge = Container(
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-        decoration: BoxDecoration(color: mn.riskMidSoft, borderRadius: BorderRadius.circular(9999), border: Border.all(color: mn.riskMidRing)),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(width: 10, height: 10, child: CircularProgressIndicator(strokeWidth: 1.5, color: mn.riskMid)),
-            const SizedBox(width: 6),
-            Text('İşleniyor', style: GoogleFonts.inter(fontSize: 10.5, fontWeight: FontWeight.w600, color: mn.riskMid)),
-          ],
-        ),
-      );
-    } else {
-      statusBadge = Container(
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-        decoration: BoxDecoration(color: mn.riskHighSoft, borderRadius: BorderRadius.circular(9999), border: Border.all(color: mn.riskHighRing)),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(width: 6, height: 6, decoration: BoxDecoration(color: mn.riskHigh, shape: BoxShape.circle)),
-            const SizedBox(width: 5),
-            Text('Hata', style: GoogleFonts.inter(fontSize: 10.5, fontWeight: FontWeight.w600, color: mn.riskHigh)),
-          ],
-        ),
-      );
-    }
+    final doc = widget.doc;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: mn.bgCard, borderRadius: BorderRadius.circular(16), border: Border.all(color: mn.border)),
-      child: Column(
+      decoration: BoxDecoration(
+        color: mn.bgCard,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: mn.border),
+      ),
+      child: Row(
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 40, height: 40,
-                decoration: BoxDecoration(color: mn.accentSoft, borderRadius: BorderRadius.circular(10), border: Border.all(color: mn.accentRing)),
-                child: Icon(Icons.picture_as_pdf_outlined, size: 20, color: accent),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          Container(
+            width: 42, height: 42,
+            decoration: BoxDecoration(color: mn.accentSoft, borderRadius: BorderRadius.circular(10), border: Border.all(color: mn.accentRing)),
+            child: Icon(Icons.picture_as_pdf_outlined, size: 20, color: accent),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(doc.fileName, style: GoogleFonts.inter(fontSize: 13.5, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurface), overflow: TextOverflow.ellipsis),
+                const SizedBox(height: 3),
+                Row(
                   children: [
-                    Text(doc.name, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurface), overflow: TextOverflow.ellipsis),
-                    Text('${doc.size} · ${doc.date}', style: GoogleFonts.jetBrainsMono(fontSize: 10.5, color: mn.textFaint)),
+                    if (doc.isDone)
+                      RiskPill(risk: RiskLevel.safe, small: true)
+                    else if (doc.isProcessing)
+                      SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 1.5, color: mn.riskMid))
+                    else
+                      Container(width: 8, height: 8, decoration: BoxDecoration(color: mn.riskHigh, shape: BoxShape.circle)),
+                    const SizedBox(width: 6),
+                    Text(doc.statusLabel, style: GoogleFonts.inter(fontSize: 11, color: mn.textMuted)),
+                    const SizedBox(width: 8),
+                    Text('· ${doc.sizeLabel}', style: GoogleFonts.jetBrainsMono(fontSize: 10, color: mn.textFaint)),
                   ],
                 ),
-              ),
-              statusBadge,
-            ],
-          ),
-          if (doc.status == 'done') ...[
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.only(top: 12),
-              decoration: BoxDecoration(border: Border(top: BorderSide(color: mn.borderSubtle))),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: onAnalysisTap,
-                      child: Container(
-                        height: 38,
-                        decoration: BoxDecoration(color: mn.bgInset, borderRadius: BorderRadius.circular(9999), border: Border.all(color: mn.border)),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.bar_chart, size: 14, color: mn.textSoft),
-                            const SizedBox(width: 6),
-                            Text('Analizi Gör', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w500, color: mn.textSoft)),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  _IconBtn(icon: Icons.download_outlined, mn: mn),
-                  const SizedBox(width: 8),
-                  _IconBtn(icon: Icons.delete_outline, mn: mn),
-                ],
-              ),
-            ),
-          ],
-          if (doc.status == 'error') ...[
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Icon(Icons.warning_amber_rounded, size: 14, color: mn.riskHigh),
-                const SizedBox(width: 6),
-                Text('Dosya boyutu çok büyük. ', style: GoogleFonts.inter(fontSize: 12, color: mn.riskHigh)),
-                Text('Tekrar Dene', style: GoogleFonts.inter(fontSize: 12, color: accent)),
               ],
             ),
-          ],
+          ),
+          const SizedBox(width: 8),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              // PDF görüntüle butonu
+              GestureDetector(
+                onTap: _pdfLoading ? null : _openPdf,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                  decoration: BoxDecoration(color: mn.bgInset, borderRadius: BorderRadius.circular(8), border: Border.all(color: mn.border)),
+                  child: _pdfLoading
+                      ? SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 1.5, color: accent))
+                      : Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.visibility_outlined, size: 13, color: mn.textMuted),
+                            const SizedBox(width: 4),
+                            Text('PDF', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w500, color: mn.textMuted)),
+                          ],
+                        ),
+                ),
+              ),
+              if (doc.isDone) ...[
+                const SizedBox(height: 5),
+                GestureDetector(
+                  onTap: widget.onView,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                    decoration: BoxDecoration(color: mn.accentSoft, borderRadius: BorderRadius.circular(8), border: Border.all(color: mn.accentRing)),
+                    child: Text('Analizi Gör', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w500, color: accent)),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 5),
+              GestureDetector(
+                onTap: widget.onDelete,
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(color: mn.riskHighSoft, borderRadius: BorderRadius.circular(8), border: Border.all(color: mn.riskHighRing)),
+                  child: Icon(Icons.delete_outline, size: 16, color: mn.riskHigh),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
-    );
-  }
-}
-
-class _IconBtn extends StatelessWidget {
-  const _IconBtn({required this.icon, required this.mn});
-  final IconData icon;
-  final MnColors mn;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 38, height: 38,
-      decoration: BoxDecoration(color: mn.bgInset, borderRadius: BorderRadius.circular(9999), border: Border.all(color: mn.border)),
-      child: Icon(icon, size: 16, color: mn.textSoft),
     );
   }
 }

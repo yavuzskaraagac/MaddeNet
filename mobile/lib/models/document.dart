@@ -1,37 +1,43 @@
-class Document {
-  const Document({
+class DocumentModel {
+  final String id;
+  final String fileName;
+  final int fileSize;
+  final String status;
+  final DateTime createdAt;
+  final String? analysisId;
+
+  DocumentModel({
     required this.id,
     required this.fileName,
     required this.fileSize,
-    required this.uploadedAt,
     required this.status,
+    required this.createdAt,
     this.analysisId,
-    this.riskScore,
   });
 
-  final String id;
-  final String fileName;
-  final String fileSize;
-  final DateTime uploadedAt;
-  final String status; // 'done' | 'processing' | 'error'
-  final String? analysisId;
-  final int? riskScore;
+  factory DocumentModel.fromJson(Map<String, dynamic> j) => DocumentModel(
+        id: j['id']?.toString() ?? '',
+        fileName: j['file_name']?.toString() ?? '',
+        fileSize: (j['file_size'] as num?)?.toInt() ?? 0,
+        status: j['status']?.toString() ?? 'uploaded',
+        createdAt: DateTime.tryParse(j['created_at']?.toString() ?? '') ?? DateTime.now(),
+        analysisId: j['analysis_id']?.toString(),
+      );
 
-  String get statusLabel {
-    switch (status) {
-      case 'done': return 'Tamamlandı';
-      case 'processing': return 'İşleniyor';
-      default: return 'Hata';
-    }
+  bool get isDone => status == 'analyzed';
+  bool get isProcessing => status == 'processing' || status == 'uploaded';
+  bool get isError => status == 'error';
+
+  String get statusLabel => switch (status) {
+        'analyzed' => 'Analiz Edildi',
+        'processing' => 'İşleniyor',
+        'uploaded' => 'Yüklendi',
+        'error' => 'Hata',
+        _ => status,
+      };
+
+  String get sizeLabel {
+    if (fileSize < 1024 * 1024) return '${(fileSize / 1024).toStringAsFixed(0)} KB';
+    return '${(fileSize / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
-
-  factory Document.fromJson(Map<String, dynamic> j) => Document(
-    id: j['id']?.toString() ?? '',
-    fileName: j['file_name'] ?? '',
-    fileSize: j['file_size'] ?? '',
-    uploadedAt: DateTime.tryParse(j['uploaded_at'] ?? '') ?? DateTime.now(),
-    status: j['status'] ?? 'error',
-    analysisId: j['analysis_id']?.toString(),
-    riskScore: j['risk_score'],
-  );
 }

@@ -2,6 +2,9 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import '../providers/auth_provider.dart';
+import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/mn_button.dart';
 import '../widgets/mn_card.dart';
@@ -18,7 +21,9 @@ class _UploadScreenState extends State<UploadScreen> {
   PlatformFile? _file;
   String _contractType = 'Kira Sözleşmesi';
   bool _showTypes = false;
+  bool _uploading = false;
   bool _analyzing = false;
+  Future<String>? _analysisFuture;
 
   static const _types = [
     'Kira Sözleşmesi',
@@ -28,6 +33,14 @@ class _UploadScreenState extends State<UploadScreen> {
     'Genel Sözleşme',
   ];
 
+  static const _typeToCode = {
+    'Kira Sözleşmesi': 'kira',
+    'İş Sözleşmesi': 'is_sozlesmesi',
+    'Ticari Sözleşme': 'ticari',
+    'Tüketici Sözleşmesi': 'tuketici',
+    'Genel Sözleşme': 'genel',
+  };
+
   Future<void> _pickFile() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
@@ -36,8 +49,40 @@ class _UploadScreenState extends State<UploadScreen> {
     if (result != null) setState(() => _file = result.files.first);
   }
 
-  void _startAnalysis() {
-    setState(() => _analyzing = true);
+  Future<void> _startAnalysis() async {
+    if (_file == null || _file!.path == null) return;
+
+    final token = context.read<AuthProvider>().token;
+    if (token == null) {
+      context.go('/auth');
+      return;
+    }
+
+    setState(() => _uploading = true);
+
+    try {
+      final api = ApiService();
+      final docResult = await api.uploadDocument(_file!.path!, token);
+      final documentId = docResult['id'] as String;
+
+      final typeCode = _typeToCode[_contractType] ?? 'genel';
+      final future = api
+          .startAnalysis(documentId, typeCode, token)
+          .then((data) => data['id'] as String);
+
+      setState(() {
+        _uploading = false;
+        _analyzing = true;
+        _analysisFuture = future;
+      });
+    } catch (e) {
+      setState(() => _uploading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+        );
+      }
+    }
   }
 
   String _formatSize(int? bytes) {
@@ -72,10 +117,8 @@ class _UploadScreenState extends State<UploadScreen> {
                       style: GoogleFonts.inter(fontSize: 13.5, color: mn.textMuted),
                     ),
                     const SizedBox(height: 20),
-                    // Step indicator
                     _StepRow(fileSelected: _file != null),
                     const SizedBox(height: 24),
-                    // Drop zone
                     GestureDetector(
                       onTap: _file == null ? _pickFile : null,
                       child: AnimatedContainer(
@@ -87,7 +130,6 @@ class _UploadScreenState extends State<UploadScreen> {
                           border: Border.all(
                             color: _file != null ? mn.riskSafeRing : mn.border,
                             width: 1.5,
-                            style: _file != null ? BorderStyle.solid : BorderStyle.solid,
                           ),
                         ),
                         child: _file != null
@@ -130,7 +172,6 @@ class _UploadScreenState extends State<UploadScreen> {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    // Contract type
                     Text('SÖZLEŞME TÜRÜ', style: GoogleFonts.jetBrainsMono(fontSize: 10, color: mn.textFaint, letterSpacing: 0.1)),
                     const SizedBox(height: 8),
                     GestureDetector(
@@ -179,7 +220,6 @@ class _UploadScreenState extends State<UploadScreen> {
                       ),
                     ],
                     const SizedBox(height: 18),
-                    // Info card
                     MnCard(
                       child: Row(
                         children: [
@@ -219,24 +259,45 @@ class _UploadScreenState extends State<UploadScreen> {
                   color: Theme.of(context).scaffoldBackgroundColor,
                   border: Border(top: BorderSide(color: mn.borderSubtle)),
                 ),
-                child: MnPrimaryButton(
-                  label: 'Analizi Başlat',
-                  icon: Icons.auto_awesome,
-                  fullWidth: true,
-                  height: 52,
-                  onPressed: _file != null ? _startAnalysis : null,
-                ),
+                child: _uploading
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: accent)),
+                              const SizedBox(width: 12),
+                              Text('PDF yükleniyor...', style: GoogleFonts.inter(fontSize: 14, color: mn.textMuted)),
+                            ],
+                          ),
+                        ),
+                      )
+                    : MnPrimaryButton(
+                        label: 'Analizi Başlat',
+                        icon: Icons.auto_awesome,
+                        fullWidth: true,
+                        height: 52,
+                        onPressed: _file != null ? _startAnalysis : null,
+                      ),
               ),
             ],
           ),
         ),
-        if (_analyzing)
+        if (_analyzing && _analysisFuture != null)
           AnalyzingSheet(
             fileName: _file?.name ?? '',
             contractType: _contractType,
-            onDone: () {
+            analysisFuture: _analysisFuture!,
+            onDone: (analysisId) {
               setState(() => _analyzing = false);
-              context.go('/results/new');
+              context.go('/results/$analysisId');
+            },
+            onError: (error) {
+              setState(() => _analyzing = false);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Analiz hatası: $error')),
+              );
             },
           ),
       ],
@@ -254,9 +315,7 @@ class _StepRow extends StatelessWidget {
     final steps = [('01', 'Yükle'), ('02', 'İşle'), ('03', 'Analiz'), ('04', 'Bitti')];
     return Row(
       children: List.generate(steps.length * 2 - 1, (i) {
-        if (i.isOdd) {
-          return Expanded(child: Container(height: 1, color: mn.border));
-        }
+        if (i.isOdd) return Expanded(child: Container(height: 1, color: mn.border));
         final idx = i ~/ 2;
         final (n, label) = steps[idx];
         final isDone = idx == 0 && fileSelected;
@@ -273,8 +332,7 @@ class _StepRow extends StatelessWidget {
               child: Center(
                 child: isDone
                     ? Icon(Icons.check, size: 14, color: mn.riskSafe)
-                    : Text(n, style: GoogleFonts.jetBrainsMono(fontSize: 11, fontWeight: FontWeight.w600,
-                        color: isActive ? mn.logoFg : mn.textMuted)),
+                    : Text(n, style: GoogleFonts.jetBrainsMono(fontSize: 11, fontWeight: FontWeight.w600, color: isActive ? mn.logoFg : mn.textMuted)),
               ),
             ),
             const SizedBox(height: 6),

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -9,12 +10,16 @@ class AnalyzingSheet extends StatefulWidget {
     super.key,
     required this.fileName,
     required this.contractType,
+    required this.analysisFuture,
     required this.onDone,
+    required this.onError,
   });
 
   final String fileName;
   final String contractType;
-  final VoidCallback onDone;
+  final Future<String> analysisFuture;
+  final void Function(String analysisId) onDone;
+  final void Function(String error) onError;
 
   @override
   State<AnalyzingSheet> createState() => _AnalyzingSheetState();
@@ -33,22 +38,52 @@ class _AnalyzingSheetState extends State<AnalyzingSheet> {
   double _pct = 0;
   int _step = 0;
   Timer? _timer;
+  bool _apiDone = false;
+  String? _analysisId;
+  bool _finalizing = false;
 
   @override
   void initState() {
     super.initState();
-    _timer = Timer.periodic(const Duration(milliseconds: 60), (_) {
+    _startTimer();
+    widget.analysisFuture.then((id) {
+      if (!mounted) return;
+      _apiDone = true;
+      _analysisId = id;
+      // If animation already at 90%+, finalize immediately
+      if (_pct >= 90) _finalize();
+    }).catchError((e) {
+      if (!mounted) return;
+      _timer?.cancel();
+      widget.onError(e.toString().replaceFirst('Exception: ', ''));
+    });
+  }
+
+  void _startTimer() {
+    _timer = Timer.periodic(const Duration(milliseconds: 80), (_) {
       if (!mounted) return;
       setState(() {
-        _pct = (_pct + 1.4).clamp(0, 100);
-        _step = (_pct / (100 / _stages.length)).floor().clamp(0, _stages.length - 1);
+        if (_pct < 90) {
+          // Reach 90% in ~24 seconds (0.3 per 80ms)
+          _pct = min(90, _pct + 0.3);
+          _step = (_pct / (100 / _stages.length)).floor().clamp(0, _stages.length - 1);
+        } else if (_apiDone && !_finalizing) {
+          _finalize();
+        }
+        // At 90%, freeze and wait for API
       });
-      if (_pct >= 100) {
-        _timer?.cancel();
-        Future.delayed(const Duration(milliseconds: 350), () {
-          if (mounted) widget.onDone();
-        });
-      }
+    });
+  }
+
+  void _finalize() {
+    _finalizing = true;
+    _timer?.cancel();
+    setState(() {
+      _pct = 100;
+      _step = _stages.length - 1;
+    });
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (mounted) widget.onDone(_analysisId!);
     });
   }
 
@@ -62,11 +97,12 @@ class _AnalyzingSheetState extends State<AnalyzingSheet> {
   Widget build(BuildContext context) {
     final mn = MnColors.of(context);
     final accent = Theme.of(context).colorScheme.primary;
+    final isWaiting = _pct >= 90 && !_apiDone;
 
     return Material(
       color: Colors.black.withValues(alpha: 0.55),
       child: BackdropFilter(
-        filter: _blurFilter(),
+        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
         child: Align(
           alignment: Alignment.bottomCenter,
           child: Container(
@@ -83,7 +119,6 @@ class _AnalyzingSheetState extends State<AnalyzingSheet> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Grip
                   Center(
                     child: Container(
                       width: 36, height: 4,
@@ -91,7 +126,6 @@ class _AnalyzingSheetState extends State<AnalyzingSheet> {
                       decoration: BoxDecoration(color: mn.border, borderRadius: BorderRadius.circular(2)),
                     ),
                   ),
-                  // Header
                   Row(
                     children: [
                       Container(
@@ -108,7 +142,7 @@ class _AnalyzingSheetState extends State<AnalyzingSheet> {
                               TextSpan(
                                 style: GoogleFonts.newsreader(fontSize: 20, fontWeight: FontWeight.w500),
                                 children: [
-                                  TextSpan(text: 'Analiz yapılıyor', style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
+                                  TextSpan(text: isWaiting ? 'Yapay zeka analiz ediyor' : 'Analiz yapılıyor', style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
                                   TextSpan(text: '…', style: TextStyle(color: accent)),
                                 ],
                               ),
@@ -124,11 +158,13 @@ class _AnalyzingSheetState extends State<AnalyzingSheet> {
                     ],
                   ),
                   const SizedBox(height: 20),
-                  // Progress
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('${_step + 1}/${_stages.length} aşama', style: GoogleFonts.inter(fontSize: 12, color: mn.textMuted)),
+                      Text(
+                        isWaiting ? 'GPT-4o yanıt bekliyor...' : '${_step + 1}/${_stages.length} aşama',
+                        style: GoogleFonts.inter(fontSize: 12, color: mn.textMuted),
+                      ),
                       Text('%${_pct.round()}', style: GoogleFonts.jetBrainsMono(fontSize: 12, fontWeight: FontWeight.w600, color: accent)),
                     ],
                   ),
@@ -143,14 +179,13 @@ class _AnalyzingSheetState extends State<AnalyzingSheet> {
                     ),
                   ),
                   const SizedBox(height: 20),
-                  // Stages
                   ...List.generate(_stages.length, (i) {
-                    final isDone = i < _step;
-                    final isActive = i == _step;
+                    final isDone = i < _step || _pct >= 100;
+                    final isActive = i == _step && _pct < 100;
                     return Container(
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       decoration: BoxDecoration(
-                        border: i == 0 ? null : Border(top: BorderSide(color: mn.border, style: BorderStyle.solid)),
+                        border: i == 0 ? null : Border(top: BorderSide(color: mn.border)),
                       ),
                       child: Row(
                         children: [
@@ -165,10 +200,7 @@ class _AnalyzingSheetState extends State<AnalyzingSheet> {
                               child: isDone
                                   ? Icon(Icons.check, size: 12, color: mn.riskSafe)
                                   : isActive
-                                      ? SizedBox(
-                                          width: 12, height: 12,
-                                          child: CircularProgressIndicator(strokeWidth: 1.5, color: accent),
-                                        )
+                                      ? SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 1.5, color: accent))
                                       : Text('${i + 1}', style: GoogleFonts.jetBrainsMono(fontSize: 10, fontWeight: FontWeight.w600, color: mn.textMuted)),
                             ),
                           ),
@@ -203,6 +235,4 @@ class _AnalyzingSheetState extends State<AnalyzingSheet> {
       ),
     );
   }
-
-  ImageFilter _blurFilter() => ImageFilter.blur(sigmaX: 8, sigmaY: 8);
 }
