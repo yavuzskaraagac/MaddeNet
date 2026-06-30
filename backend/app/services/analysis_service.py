@@ -67,9 +67,9 @@ async def extract_text_from_pdf(pdf_bytes: bytes) -> str:
 # ── Risk Seviyesi Yardimcisi ──────────────────────────────────────────────────
 
 def _genel_risk_seviyesi(skor: int) -> RiskLevel:
-    if skor >= 60:
+    if skor >= 70:
         return RiskLevel.RED
-    if skor >= 25:
+    if skor >= 40:
         return RiskLevel.YELLOW
     return RiskLevel.GREEN
 

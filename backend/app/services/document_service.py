@@ -5,6 +5,8 @@ Supabase Storage'a PDF yukler ve documents tablosunu yonetir.
 Bucket adi: "contracts"
 """
 
+import re
+import unicodedata
 import uuid
 from datetime import datetime
 
@@ -15,6 +17,15 @@ from app.services.supabase_client import get_supabase_client
 
 BUCKET = "contracts"
 MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
+
+
+def _sanitize_filename(name: str) -> str:
+    """Türkçe karakter ve boşlukları Supabase Storage için güvenli hale getirir."""
+    name = unicodedata.normalize("NFKD", name)
+    name = name.encode("ascii", "ignore").decode("ascii")
+    name = re.sub(r"[^\w\-.]", "_", name)
+    name = re.sub(r"_+", "_", name)
+    return name.strip("_")
 
 
 async def upload_document(
@@ -41,7 +52,8 @@ async def upload_document(
         )
 
     belge_id = str(uuid.uuid4())
-    storage_path = f"{user_id}/{belge_id}/{file.filename}"
+    safe_name = _sanitize_filename(file.filename or "belge.pdf")
+    storage_path = f"{user_id}/{belge_id}/{safe_name}"
 
     supabase = get_supabase_client()
 
